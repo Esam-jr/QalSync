@@ -36,15 +36,24 @@ function friendlyFetchError(status: number, fallback: string): string {
 
 function friendlyAuthError(message: string): string {
   const lower = message.toLowerCase();
-  if (lower.includes("invalid login")) return "Incorrect email or password.";
+  if (lower.includes("invalid login") || lower.includes("invalid credentials"))
+    return "Incorrect email or password.";
   if (lower.includes("email not confirmed"))
-    return "Check your inbox — your email hasn't been confirmed yet.";
-  if (lower.includes("already registered") || lower.includes("already exists"))
-    return "An account with this email already exists. Try logging in.";
+    return "Your email has not been confirmed yet. Please check your inbox for the confirmation link.";
+  if (
+    lower.includes("already registered") ||
+    lower.includes("already exists") ||
+    lower.includes("user_already_exists")
+  )
+    return "An account with this email already exists. Click 'Sign In' below.";
   if (lower.includes("weak password") || lower.includes("at least"))
-    return "Password is too weak — use at least 6 characters.";
-  if (lower.includes("rate limit"))
-    return "Too many attempts. Please wait a moment and try again.";
+    return "Password is too weak — please use at least 6 characters.";
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("too many requests") ||
+    lower.includes("429")
+  )
+    return "Supabase rate limit reached. Please wait 60 seconds before trying again, or switch to 'Sign In' if your account was already created.";
   return message;
 }
 
@@ -127,6 +136,7 @@ export default function ReviewPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -166,6 +176,7 @@ export default function ReviewPage() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+    setAuthSuccess("");
     setAuthSubmitting(true);
 
     try {
@@ -175,11 +186,15 @@ export default function ReviewPage() {
 
       if (result.error) {
         setAuthError(friendlyAuthError(result.error.message));
-      } else if (isSignUp && result.data.user && !result.data.session) {
-        setToast({
-          message: "Account created! Check your email to confirm.",
-          type: "success",
-        });
+      } else if (isSignUp && result.data.user) {
+        if (result.data.session) {
+          setSession(result.data.session);
+        } else {
+          setAuthSuccess(
+            "Account created! If email confirmation is enabled in your Supabase project, check your inbox to confirm, then sign in below."
+          );
+          setIsSignUp(false);
+        }
       }
     } catch {
       setAuthError("Network error. Check your connection and try again.");
@@ -335,6 +350,12 @@ export default function ReviewPage() {
               </div>
             )}
 
+            {authSuccess && (
+              <div className="mb-4 rounded-lg border border-success-dark/40 bg-success-dark/30 px-4 py-3 text-sm text-green-300">
+                {authSuccess}
+              </div>
+            )}
+
             <form onSubmit={handleAuth} className="flex flex-col gap-4">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-silver">
@@ -386,6 +407,7 @@ export default function ReviewPage() {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setAuthError("");
+                  setAuthSuccess("");
                 }}
                 className="font-medium text-blood transition-colors hover:text-blood-glow hover:cursor-pointer"
               >

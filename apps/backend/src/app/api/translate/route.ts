@@ -80,6 +80,21 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    const isQuotaError =
+      message.includes("429") ||
+      message.includes("Quota exceeded") ||
+      message.includes("limit: 0");
+
+    if (isQuotaError) {
+      return NextResponse.json(
+        {
+          error: "Gemini API rate limit or quota exceeded.",
+          details: message,
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal server error", details: message },
       { status: 500 }
