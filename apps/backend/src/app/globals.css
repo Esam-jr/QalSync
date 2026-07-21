@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Base palette: Sharingan Dark ── */
+  --color-void: #090909;
+  --color-obsidian: #111111;
+  --color-onyx: #1a1a1a;
+  --color-ash: #2a2a2a;
+  --color-smoke: #3a3a3a;
+  --color-slate: #6b6b6b;
+  --color-silver: #a0a0a0;
+  --color-bone: #d4d4d4;
+  --color-ivory: #eeeeee;
+
+  /* ── Crimson surfaces (30%) ── */
+  --color-crimson: #B63331;
+  --color-crimson-dark: #8a2422;
+  --color-crimson-deep: #6b1c1a;
+
+  /* ── Blood-red accents (10%) ── */
+  --color-blood: #FF2A2A;
+  --color-blood-glow: #ff4444;
+
+  --color-success: #22c55e;
+  --color-success-dark: #166534;
+}
+
+/* ── Global base styles ── */
+body {
+  background-color: var(--color-void);
+  color: var(--color-ivory);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+::selection {
+  background-color: var(--color-crimson);
+  color: white;
+}
+
+/* ── Spinner keyframe ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
