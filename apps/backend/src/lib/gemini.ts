@@ -18,11 +18,7 @@ function getGenAI(): GoogleGenerativeAI {
   return genAI;
 }
 
-/**
- * Translate text into the target locale using Gemini.
- * The prompt is tuned for natural, contemporary phrasing in
- * low-resource languages like Amharic and Afaan Oromo.
- */
+
 export async function translateText(
   text: string,
   locale: string
