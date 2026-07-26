@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase";
+import { createClient, getAuthenticatedUser } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
@@ -6,6 +6,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized: Authentication required to update translations" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { translation, status } = body as {

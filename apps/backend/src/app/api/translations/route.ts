@@ -1,8 +1,16 @@
-import { createClient } from "@/lib/supabase";
+import { createClient, getAuthenticatedUser } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized: Authentication required to view translations" },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get("projectId");
     const locale = searchParams.get("locale");

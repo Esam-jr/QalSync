@@ -2,8 +2,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Only protect /review routes
-  if (!request.nextUrl.pathname.startsWith("/review")) {
+  // Refresh session for /review dashboard and /api/translations management routes
+  const isProtected =
+    request.nextUrl.pathname.startsWith("/review") ||
+    request.nextUrl.pathname.startsWith("/api/translations");
+
+  if (!isProtected) {
     return NextResponse.next();
   }
 
@@ -47,5 +51,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/review/:path*"],
+  matcher: ["/review/:path*", "/api/translations/:path*"],
 };
+
