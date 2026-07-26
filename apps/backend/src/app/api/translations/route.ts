@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
 
     if (projectId) query = query.eq("project_id", projectId);
     if (locale) query = query.eq("locale", locale);
-    if (status) query = query.eq("status", status);
+    if (status && status !== "all") query = query.eq("status", status);
+
 
     const { data, error } = await query;
 

@@ -64,3 +64,42 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized: Authentication required to delete translations" },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await params;
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("translations")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Failed to delete translation", details: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, id });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json(
+      { error: "Internal server error", details: message },
+      { status: 500 }
+    );
+  }
+}
+

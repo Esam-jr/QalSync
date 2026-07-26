@@ -4,24 +4,22 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase-browser";
 import type { Session } from "@supabase/supabase-js";
 
-
 type Translation = {
   id: string;
   source_text: string;
   translation: string | null;
   locale: string;
-  status: string;
+  status: "draft" | "approved";
   project_id: string;
   created_at: string;
 };
 
 type RowError = { id: string; message: string };
 
-
 function friendlyFetchError(status: number, fallback: string): string {
   const map: Record<number, string> = {
     400: "Bad request — check your inputs and try again.",
-    401: "Session expired. Please log in again.",
+    401: "Session expired or unauthorized. Please log in again.",
     403: "You don't have permission to perform this action.",
     404: "Translation not found — it may have been deleted.",
     409: "Conflict — this translation was already updated by someone else.",
@@ -53,7 +51,7 @@ function friendlyAuthError(message: string): string {
     lower.includes("too many requests") ||
     lower.includes("429")
   )
-    return "Supabase rate limit reached. Please wait 60 seconds before trying again, or switch to 'Sign In' if your account was already created.";
+    return "Supabase rate limit reached. Please wait 60 seconds before trying again.";
   return message;
 }
 
@@ -114,7 +112,7 @@ function Toast({
       <span className="text-sm font-medium">{message}</span>
       <button
         onClick={onDismiss}
-        className="ml-2 text-white/60 hover:text-white transition-colors"
+        className="ml-2 text-white/60 hover:text-white transition-colors hover:cursor-pointer"
       >
         ✕
       </button>
@@ -140,14 +138,22 @@ export default function ReviewPage() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // Dashboard
+  // Dashboard state
   const [projectId, setProjectId] = useState("default");
   const [locale, setLocale] = useState("am");
+  const [statusTab, setStatusTab] = useState<"draft" | "approved" | "all">("draft");
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [editedTranslations, setEditedTranslations] = useState<
     Record<string, string>
   >({});
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const [fetchLoading, setFetchLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [rowErrors, setRowErrors] = useState<RowError[]>([]);
@@ -191,7 +197,7 @@ export default function ReviewPage() {
           setSession(result.data.session);
         } else {
           setAuthSuccess(
-            "Account created! If email confirmation is enabled in your Supabase project, check your inbox to confirm, then sign in below."
+            "Account created! Check your inbox to confirm, then sign in."
           );
           setIsSignUp(false);
         }
@@ -214,13 +220,15 @@ export default function ReviewPage() {
     setFetchError("");
     setFetchLoading(true);
     setRowErrors([]);
+    setSelectedIds(new Set());
 
     try {
       const params = new URLSearchParams({
         projectId,
         locale,
-        status: "draft",
+        status: statusTab,
       });
+
       const res = await fetch(`/api/translations?${params}`);
 
       if (!res.ok) {
@@ -243,16 +251,46 @@ export default function ReviewPage() {
     } finally {
       setFetchLoading(false);
     }
-  }, [projectId, locale]);
+  }, [projectId, locale, statusTab]);
 
   useEffect(() => {
     if (session) fetchTranslations();
   }, [session, fetchTranslations]);
 
-  /* ── Approve a translation ── */
+  /* ── Computed Filtered Rows ── */
+
+  const filteredTranslations = useMemo(() => {
+    if (!searchQuery.trim()) return translations;
+    const q = searchQuery.toLowerCase().trim();
+    return translations.filter(
+      (t) =>
+        t.source_text.toLowerCase().includes(q) ||
+        (t.translation && t.translation.toLowerCase().includes(q))
+    );
+  }, [translations, searchQuery]);
+
+  /* ── Selection Helpers ── */
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTranslations.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredTranslations.map((t) => t.id)));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /* ── Approve single translation ── */
 
   const handleApprove = async (id: string) => {
-    // Clear any previous error for this row
     setRowErrors((prev) => prev.filter((e) => e.id !== id));
     setApprovingIds((prev) => new Set(prev).add(id));
 
@@ -271,13 +309,28 @@ export default function ReviewPage() {
       if (!res.ok) {
         const errMsg = friendlyFetchError(
           res.status,
-          "Failed to approve this translation."
+          "Failed to approve translation."
         );
         setRowErrors((prev) => [...prev, { id, message: errMsg }]);
         return;
       }
 
-      setTranslations((prev) => prev.filter((t) => t.id !== id));
+      if (statusTab === "draft") {
+        setTranslations((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        setTranslations((prev) =>
+          prev.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  status: "approved",
+                  translation: editedTranslations[id] ?? t.translation,
+                }
+              : t
+          )
+        );
+      }
+
       setToast({ message: "Translation approved!", type: "success" });
     } catch (err) {
       const message =
@@ -296,6 +349,113 @@ export default function ReviewPage() {
     }
   };
 
+  /* ── Delete single translation ── */
+
+  const handleDelete = async (id: string) => {
+    setRowErrors((prev) => prev.filter((e) => e.id !== id));
+    setDeletingIds((prev) => new Set(prev).add(id));
+
+    try {
+      const res = await fetch(`/api/translations/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errMsg = friendlyFetchError(
+          res.status,
+          "Failed to delete translation."
+        );
+        setRowErrors((prev) => [...prev, { id, message: errMsg }]);
+        return;
+      }
+
+      setTranslations((prev) => prev.filter((t) => t.id !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
+      setToast({ message: "Translation removed", type: "success" });
+    } catch (err) {
+      const message =
+        err instanceof TypeError
+          ? "Network error — check your connection."
+          : err instanceof Error
+            ? err.message
+            : "Failed to delete.";
+      setRowErrors((prev) => [...prev, { id, message }]);
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  /* ── Bulk Actions ── */
+
+  const handleBulkApprove = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+
+    const idsToApprove = Array.from(selectedIds);
+    let successCount = 0;
+
+    for (const id of idsToApprove) {
+      try {
+        const body: Record<string, string> = { status: "approved" };
+        if (editedTranslations[id] !== undefined) {
+          body.translation = editedTranslations[id];
+        }
+
+        const res = await fetch(`/api/translations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (res.ok) successCount++;
+      } catch {
+        // Continue best-effort bulk approve
+      }
+    }
+
+    fetchTranslations();
+    setBulkLoading(false);
+    setToast({
+      message: `Successfully approved ${successCount} translation(s)!`,
+      type: "success",
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+
+    const idsToDelete = Array.from(selectedIds);
+    let successCount = 0;
+
+    for (const id of idsToDelete) {
+      try {
+        const res = await fetch(`/api/translations/${id}`, {
+          method: "DELETE",
+        });
+        if (res.ok) successCount++;
+      } catch {
+        // Continue best-effort bulk delete
+      }
+    }
+
+    fetchTranslations();
+    setBulkLoading(false);
+    setToast({
+      message: `Deleted ${successCount} translation(s).`,
+      type: "success",
+    });
+  };
+
   const getRowError = (id: string) =>
     rowErrors.find((e) => e.id === id)?.message;
 
@@ -303,7 +463,6 @@ export default function ReviewPage() {
      Render
      ══════════════════════════════════════ */
 
-  // ── Loading splash ──
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-void">
@@ -315,7 +474,6 @@ export default function ReviewPage() {
     );
   }
 
-  // ── Auth screen ──
   if (!session) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-void px-4">
@@ -328,7 +486,6 @@ export default function ReviewPage() {
         )}
 
         <div className="w-full max-w-sm">
-          {/* Logo / Title */}
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold tracking-tight text-ivory">
               Qal<span className="text-blood">Sync</span>
@@ -338,7 +495,6 @@ export default function ReviewPage() {
             </p>
           </div>
 
-          {/* Card */}
           <div className="rounded-xl border border-ash bg-obsidian p-6 shadow-2xl">
             <h2 className="mb-5 text-lg font-semibold text-bone">
               {isSignUp ? "Create Account" : "Welcome Back"}
@@ -420,7 +576,6 @@ export default function ReviewPage() {
     );
   }
 
-  // ── Dashboard ──
   return (
     <main className="min-h-screen bg-void px-4 py-8">
       {toast && (
@@ -438,21 +593,80 @@ export default function ReviewPage() {
             <h1 className="text-2xl font-bold tracking-tight text-ivory">
               Qal<span className="text-blood">Sync</span>
               <span className="ml-2 text-base font-normal text-silver">
-                Review
+                Review Dashboard
               </span>
             </h1>
           </div>
           <button
             onClick={handleLogout}
-            className="rounded-lg border border-ash bg-onyx px-4 py-2 text-sm text-silver transition-colors hover:border-crimson hover:text-ivory"
+            className="rounded-lg border border-ash bg-onyx px-4 py-2 text-sm text-silver transition-colors hover:border-crimson hover:text-ivory hover:cursor-pointer"
           >
             Log Out
           </button>
         </div>
 
-        {/* Filters bar */}
+        {/* Status Tabs */}
+        <div className="mb-6 flex items-center justify-between border-b border-ash pb-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStatusTab("draft")}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all hover:cursor-pointer ${
+                statusTab === "draft"
+                  ? "bg-blood text-white shadow-md shadow-blood/20"
+                  : "bg-onyx text-silver hover:bg-obsidian hover:text-ivory"
+              }`}
+            >
+              Drafts
+            </button>
+            <button
+              onClick={() => setStatusTab("approved")}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all hover:cursor-pointer ${
+                statusTab === "approved"
+                  ? "bg-blood text-white shadow-md shadow-blood/20"
+                  : "bg-onyx text-silver hover:bg-obsidian hover:text-ivory"
+              }`}
+            >
+              Approved
+            </button>
+            <button
+              onClick={() => setStatusTab("all")}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all hover:cursor-pointer ${
+                statusTab === "all"
+                  ? "bg-blood text-white shadow-md shadow-blood/20"
+                  : "bg-onyx text-silver hover:bg-obsidian hover:text-ivory"
+              }`}
+            >
+              All
+            </button>
+          </div>
+        </div>
+
+        {/* Filters & Search bar */}
         <div className="mb-6 flex flex-wrap items-end gap-4 rounded-xl border border-ash bg-obsidian p-4">
-          <div className="flex-1 min-w-[180px]">
+          <div className="flex-1 min-w-[200px]">
+            <label className="mb-1.5 block text-xs font-medium text-silver">
+              Search Strings
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search source or translation text..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 pr-8 text-sm text-ivory placeholder-smoke outline-none transition-colors focus:border-crimson"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2.5 text-xs text-silver hover:text-ivory"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-[160px]">
             <label className="mb-1.5 block text-xs font-medium text-silver">
               Project ID
             </label>
@@ -480,12 +694,51 @@ export default function ReviewPage() {
           <button
             onClick={fetchTranslations}
             disabled={fetchLoading}
-            className="flex items-center gap-2 rounded-lg border border-crimson bg-crimson-dark px-4 py-2 text-sm font-medium text-ivory transition-all hover:bg-crimson disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-crimson bg-crimson-dark px-4 py-2 text-sm font-medium text-ivory transition-all hover:bg-crimson disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
           >
             {fetchLoading && <Spinner />}
             {fetchLoading ? "Loading…" : "Refresh"}
           </button>
         </div>
+
+        {/* Bulk Actions Bar */}
+        {filteredTranslations.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ash bg-obsidian/70 px-4 py-3">
+            <label className="flex items-center gap-2.5 text-xs font-medium text-silver hover:cursor-pointer">
+              <input
+                type="checkbox"
+                checked={
+                  selectedIds.size > 0 &&
+                  selectedIds.size === filteredTranslations.length
+                }
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-ash bg-onyx text-crimson focus:ring-crimson"
+              />
+              Select All ({selectedIds.size}/{filteredTranslations.length})
+            </label>
+
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBulkApprove}
+                  disabled={bulkLoading}
+                  className="flex items-center gap-2 rounded-lg bg-blood px-4 py-1.5 text-xs font-semibold text-white shadow-md shadow-blood/20 transition-all hover:bg-blood-glow disabled:opacity-50 hover:cursor-pointer"
+                >
+                  {bulkLoading && <Spinner />}
+                  Approve Selected ({selectedIds.size})
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkLoading}
+                  className="flex items-center gap-2 rounded-lg border border-blood/40 bg-crimson-dark/40 px-4 py-1.5 text-xs font-semibold text-blood-glow transition-all hover:bg-crimson-dark hover:text-white disabled:opacity-50 hover:cursor-pointer"
+                >
+                  {bulkLoading && <Spinner />}
+                  Delete Selected ({selectedIds.size})
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fetch error */}
         {fetchError && (
@@ -506,12 +759,16 @@ export default function ReviewPage() {
         )}
 
         {/* Empty state */}
-        {!fetchLoading && !fetchError && translations.length === 0 && (
+        {!fetchLoading && !fetchError && filteredTranslations.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-xl border border-ash bg-obsidian py-16">
             <div className="mb-4 text-4xl opacity-30">✓</div>
-            <p className="text-lg font-medium text-silver">All caught up!</p>
+            <p className="text-lg font-medium text-silver">No translations found</p>
             <p className="mt-1 text-sm text-smoke">
-              No draft translations to review.
+              {searchQuery
+                ? `No items matching "${searchQuery}"`
+                : statusTab === "draft"
+                  ? "All draft translations reviewed!"
+                  : "No translations under this filter."}
             </p>
           </div>
         )}
@@ -529,16 +786,13 @@ export default function ReviewPage() {
         )}
 
         {/* Translation cards */}
-        {translations.length > 0 && (
+        {filteredTranslations.length > 0 && (
           <div className="space-y-3">
-            <p className="mb-2 text-xs font-medium text-silver">
-              {translations.length} draft
-              {translations.length !== 1 ? "s" : ""} pending review
-            </p>
-
-            {translations.map((t) => {
-              const isPending = approvingIds.has(t.id);
+            {filteredTranslations.map((t) => {
+              const isApproving = approvingIds.has(t.id);
+              const isDeleting = deletingIds.has(t.id);
               const error = getRowError(t.id);
+              const isSelected = selectedIds.has(t.id);
 
               return (
                 <div
@@ -546,15 +800,39 @@ export default function ReviewPage() {
                   className={`group rounded-xl border transition-colors ${
                     error
                       ? "border-blood/40 bg-crimson-deep/20"
-                      : "border-ash bg-obsidian hover:border-crimson-dark"
+                      : isSelected
+                        ? "border-crimson bg-obsidian/90"
+                        : "border-ash bg-obsidian hover:border-crimson-dark"
                   }`}
                 >
-                  <div className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto]">
+                  <div className="grid gap-4 p-5 md:grid-cols-[auto_1fr_1fr_auto]">
+                    {/* Checkbox */}
+                    <div className="flex items-start pt-1">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectRow(t.id)}
+                        className="h-4 w-4 rounded border-ash bg-onyx text-crimson focus:ring-crimson hover:cursor-pointer"
+                      />
+                    </div>
+
                     {/* Source text */}
                     <div>
-                      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-smoke">
-                        Source
-                      </span>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-smoke">
+                          Source
+                        </span>
+                        {/* Status Badge */}
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                            t.status === "approved"
+                              ? "bg-green-950 text-green-400 border border-green-800"
+                              : "bg-amber-950 text-amber-400 border border-amber-800"
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      </div>
                       <p className="text-sm leading-relaxed text-bone">
                         {t.source_text}
                       </p>
@@ -575,26 +853,28 @@ export default function ReviewPage() {
                           }))
                         }
                         rows={3}
-                        disabled={isPending}
+                        disabled={isApproving || isDeleting}
                         className="w-full resize-y rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
 
-                    {/* Approve button */}
-                    <div className="flex items-start pt-5 md:pt-6">
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 pt-4 md:flex-col md:justify-center md:pt-0">
                       <button
                         onClick={() => handleApprove(t.id)}
-                        disabled={isPending}
-                        className="flex items-center gap-2 rounded-lg bg-blood px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blood/20 transition-all hover:bg-blood-glow hover:shadow-blood/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                        disabled={isApproving || isDeleting}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-blood px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blood/20 transition-all hover:bg-blood-glow disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
                       >
-                        {isPending ? (
-                          <>
-                            <Spinner />
-                            Approving…
-                          </>
-                        ) : (
-                          "Approve"
-                        )}
+                        {isApproving ? <Spinner /> : null}
+                        {t.status === "approved" ? "Update" : "Approve"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        disabled={isApproving || isDeleting}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:border-blood hover:text-blood-glow disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
+                      >
+                        {isDeleting ? <Spinner /> : "Delete"}
                       </button>
                     </div>
                   </div>
