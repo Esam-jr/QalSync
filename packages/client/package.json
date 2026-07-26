@@ -3,14 +3,23 @@
   "version": "0.1.0",
   "description": "Lightweight client for the QalSync translation API",
   "main": "dist/index.js",
+  "module": "dist/index.js",
+  "type": "module",
   "types": "dist/index.d.ts",
   "files": ["dist"],
+  "bin": {
+    "qalsync-scan": "dist/cli.js",
+    "qalsync": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build"
   },
-  "devDependencies": {
+  "dependencies": {
     "typescript": "^5.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0"
   },
   "license": "MIT"
 }

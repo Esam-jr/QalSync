@@ -135,3 +135,12 @@ export async function translateBatchWithMeta(
   return data.translations;
 }
 
+export {
+  scanProjectStrings,
+  extractStringsFromFile,
+  isTranslatableString,
+  type ScanOptions,
+} from "./scanner.js";
+
+
+

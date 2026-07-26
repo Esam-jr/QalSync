@@ -75,6 +75,28 @@ const batchResult = await translateBatch(
 // → { "Hello": "ሰላም", "Goodbye": "ደህና ሁን", "Settings": "ማስተካከያዎች" }
 ```
 
+## Automated Codebase Scanner CLI
+
+Scan `.tsx` and `.jsx` files in any React or Next.js project to automatically extract user-facing UI strings for translation:
+
+```bash
+# Scan ./src directory and save strings to qalsync.strings.json
+npx qalsync-scan ./src
+
+# Scan AND auto-translate extracted strings via QalSync Batch API
+npx qalsync-scan ./src --translate --api-url http://localhost:3000 --project-id my-app --locale am
+```
+
+Programmatic usage in Node/TypeScript scripts:
+
+```ts
+import { scanProjectStrings } from "@qalsync/client";
+
+const strings = scanProjectStrings("./src");
+console.log(`Found ${strings.length} UI strings for localization.`);
+```
+
+
 ## API Reference
 
 ### `POST /api/translate`
