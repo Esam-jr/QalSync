@@ -86,3 +86,52 @@ export async function translateWithMeta(
 
   return res.json();
 }
+
+export interface BatchTranslateResponse {
+  translations: Record<string, TranslateResponse>;
+}
+
+export async function translateBatch(
+  texts: string[],
+  locale: string,
+  options: TranslateOptions
+): Promise<Record<string, string>> {
+  const metaMap = await translateBatchWithMeta(texts, locale, options);
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(metaMap)) {
+    result[key] = val.translation;
+  }
+  return result;
+}
+
+export async function translateBatchWithMeta(
+  texts: string[],
+  locale: string,
+  options: TranslateOptions
+): Promise<Record<string, TranslateResponse>> {
+  const { apiUrl, projectId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const url = `${apiUrl.replace(/\/+$/, "")}/api/translate`;
+
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts, locale, projectId }),
+    },
+    timeoutMs
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      `QalSync batch translation failed (${res.status}): ${
+        (body as Record<string, string>).error ?? res.statusText
+      }`
+    );
+  }
+
+  const data: BatchTranslateResponse = await res.json();
+  return data.translations;
+}
+

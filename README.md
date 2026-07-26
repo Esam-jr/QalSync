@@ -54,28 +54,52 @@ The app runs at `http://localhost:3000`.
 ## Using the Client Library
 
 ```ts
-import { translate } from "@qalsync/client";
+import { translate, translateBatch } from "@qalsync/client";
 
+// Single string translation
 const result = await translate("Hello", "am", {
   apiUrl: "http://localhost:3000",
   projectId: "my-project",
 });
 // → Amharic translation string
+
+// Batch translation
+const batchResult = await translateBatch(
+  ["Hello", "Goodbye", "Settings"],
+  "am",
+  {
+    apiUrl: "http://localhost:3000",
+    projectId: "my-project",
+  }
+);
+// → { "Hello": "ሰላም", "Goodbye": "ደህና ሁን", "Settings": "ማስተካከያዎች" }
 ```
 
 ## API Reference
 
 ### `POST /api/translate`
 
-Translate a string. Returns a cached translation if available, otherwise calls Gemini and saves a draft.
+Translate a single string or a batch of strings. Returns cached translations if available, otherwise calls Gemini and saves drafts.
 
 ```json
-// Request
+// Single Request
 { "text": "Hello, world!", "locale": "am", "projectId": "my-site" }
 
-// Response
-{ "translation": "ሰላም ዓለም!", "reviewed": true }
+// Single Response
+{ "translation": "ሰላም ዓለም!", "reviewed": true, "id": "uuid" }
+
+// Batch Request
+{ "texts": ["Hello", "Goodbye"], "locale": "am", "projectId": "my-site" }
+
+// Batch Response
+{
+  "translations": {
+    "Hello": { "translation": "ሰላም", "reviewed": true, "id": "uuid-1" },
+    "Goodbye": { "translation": "ደህና ሁን", "reviewed": false, "id": "uuid-2" }
+  }
+}
 ```
+
 
 ### `GET /api/translations?projectId=...&locale=...&status=draft`
 
