@@ -38,8 +38,10 @@ export async function PATCH(
       .from("translations")
       .update(update as Record<string, unknown>)
       .eq("id", id)
+      .or(`user_id.eq.${user.id},user_id.is.null`)
       .select()
       .single();
+
 
     if (error) {
       return NextResponse.json(
@@ -84,7 +86,9 @@ export async function DELETE(
     const { error } = await supabase
       .from("translations")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .or(`user_id.eq.${user.id},user_id.is.null`);
+
 
     if (error) {
       return NextResponse.json(

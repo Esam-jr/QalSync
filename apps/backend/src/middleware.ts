@@ -5,7 +5,8 @@ export async function middleware(request: NextRequest) {
   // Refresh session for /review dashboard and /api/translations management routes
   const isProtected =
     request.nextUrl.pathname.startsWith("/review") ||
-    request.nextUrl.pathname.startsWith("/api/translations");
+    request.nextUrl.pathname.startsWith("/api/translations") ||
+    request.nextUrl.pathname.startsWith("/api/projects");
 
   if (!isProtected) {
     return NextResponse.next();
@@ -51,6 +52,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/review/:path*", "/api/translations/:path*"],
+  matcher: ["/review/:path*", "/api/translations/:path*", "/api/projects/:path*"],
 };
+
 

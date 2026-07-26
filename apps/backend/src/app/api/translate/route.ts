@@ -1,10 +1,11 @@
-import { createClient, type TranslationRow } from "@/lib/supabase";
+import { createClient, getAuthenticatedUser, type TranslationRow } from "@/lib/supabase";
 import { translateText, translateBatchText } from "@/lib/gemini";
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUser(request);
     const body = await request.json();
     const { text, texts, locale, projectId } = body as {
       text?: string;
@@ -68,9 +69,11 @@ export async function POST(request: NextRequest) {
           translation,
           status: "draft",
           project_id: projectId,
+          user_id: user?.id ?? null,
         })
         .select()
         .single();
+
 
       if (insertError) {
         return NextResponse.json(
@@ -144,7 +147,9 @@ export async function POST(request: NextRequest) {
         translation: generatedMap[t] ?? t,
         status: "draft",
         project_id: projectId,
+        user_id: user?.id ?? null,
       }));
+
 
       const { data: insertedRows, error: insertBatchError } = await supabase
         .from("translations")

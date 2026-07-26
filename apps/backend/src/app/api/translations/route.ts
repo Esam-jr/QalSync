@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("translations")
       .select("*")
+      .or(`user_id.eq.${user.id},user_id.is.null`)
       .order("created_at", { ascending: false });
+
 
     if (projectId) query = query.eq("project_id", projectId);
     if (locale) query = query.eq("locale", locale);

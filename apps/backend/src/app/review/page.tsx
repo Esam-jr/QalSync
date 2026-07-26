@@ -139,7 +139,9 @@ export default function ReviewPage() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   // Dashboard state
-  const [projectId, setProjectId] = useState("default");
+  const [projectId, setProjectId] = useState("all");
+  const [availableProjects, setAvailableProjects] = useState<string[]>(["all", "default"]);
+  const [isCustomProject, setIsCustomProject] = useState(false);
   const [locale, setLocale] = useState("am");
   const [statusTab, setStatusTab] = useState<"draft" | "approved" | "all">("draft");
   const [searchQuery, setSearchQuery] = useState("");
@@ -178,6 +180,27 @@ export default function ReviewPage() {
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projects && Array.isArray(data.projects)) {
+          setAvailableProjects(data.projects);
+        }
+      }
+    } catch {
+      // Ignore fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchProjects();
+    }
+  }, [session, fetchProjects]);
+
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -666,16 +689,53 @@ export default function ReviewPage() {
             </div>
           </div>
 
-          <div className="min-w-[160px]">
+          <div className="min-w-[180px]">
             <label className="mb-1.5 block text-xs font-medium text-silver">
               Project ID
             </label>
-            <input
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson"
-            />
+            {!isCustomProject ? (
+              <select
+                value={projectId}
+                onChange={(e) => {
+                  if (e.target.value === "__custom__") {
+                    setIsCustomProject(true);
+                    setProjectId("");
+                  } else {
+                    setProjectId(e.target.value);
+                  }
+                }}
+                className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson hover:cursor-pointer"
+              >
+                {availableProjects.map((p) => (
+                  <option key={p} value={p}>
+                    {p === "all" ? "All Projects" : p}
+                  </option>
+                ))}
+                <option value="__custom__">+ Custom Project ID...</option>
+              </select>
+            ) : (
+              <div className="relative">
+                <input
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  placeholder="Enter Project ID..."
+                  className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 pr-7 text-sm text-ivory outline-none transition-colors focus:border-crimson"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomProject(false);
+                    setProjectId("all");
+                  }}
+                  className="absolute right-2 top-2 text-xs text-silver hover:text-ivory"
+                  title="Back to dropdown"
+                >
+                  ↩
+                </button>
+              </div>
+            )}
           </div>
+
 
           <div className="min-w-[160px]">
             <label className="mb-1.5 block text-xs font-medium text-silver">
