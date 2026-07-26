@@ -9,6 +9,10 @@ A localization tool for Next.js/React apps, focused on low-resource languages (A
 /packages/client    ← Lightweight npm client library
 ```
 
+## Architecture & Workflow
+
+![Sequence Diagram](apps/backend/public/sequence-diagram.png)
+
 ## Prerequisites
 
 - Node.js ≥ 18
