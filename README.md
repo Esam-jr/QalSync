@@ -1,12 +1,12 @@
 # QalSync
 
-A localization tool for Next.js/React apps, focused on low-resource languages (Amharic, Afaan Oromo) that generic translation services handle poorly. Uses Gemini for initial translations and provides a human review workflow.
+A localization toolchain for Next.js/React apps, focused on low-resource languages (Amharic, Afaan Oromo) that generic translation services handle poorly. Uses Gemini AI for initial translations and provides a human review workflow.
 
 ## Project Structure
 
 ```
 /apps/backend       ← Next.js app (API routes + review dashboard)
-/packages/client    ← Lightweight npm client library
+/packages/client    ← QalSync CLI & SDK package
 ```
 
 ## Architecture & Workflow
@@ -33,8 +33,8 @@ GEMINI_API_KEY=your-gemini-api-key
 ## Database Setup
 
 1. Go to your Supabase project → SQL Editor.
-2. Paste and run the migration file at `apps/backend/supabase/migrations/0001_create_translations.sql`.
-3. **Enable email/password auth** in Supabase → Authentication → Providers → Email (it's on by default for new projects).
+2. Run the migration files at `apps/backend/supabase/migrations/`.
+3. Enable email/password auth in Supabase → Authentication → Providers → Email.
 
 ## Running Locally
 
@@ -51,95 +51,115 @@ The app runs at `http://localhost:3000`.
 - **API**: `POST /api/translate`, `GET /api/translations`, `PATCH /api/translations/:id`
 - **Review dashboard**: `/review`
 
-## Using the Client Library
+---
 
-```ts
-import { translate, translateBatch } from "@qalsync/client";
+## Developer CLI Workflow
 
-// Single string translation
-const result = await translate("Hello", "am", {
-  apiUrl: "http://localhost:3000",
-  projectId: "my-project",
-});
-// → Amharic translation string
-
-// Batch translation
-const batchResult = await translateBatch(
-  ["Hello", "Goodbye", "Settings"],
-  "am",
-  {
-    apiUrl: "http://localhost:3000",
-    projectId: "my-project",
-  }
-);
-// → { "Hello": "ሰላም", "Goodbye": "ደህና ሁን", "Settings": "ማስተካከያዎች" }
-```
-
-## Automated Codebase Scanner CLI
-
-Scan `.tsx` and `.jsx` files in any React or Next.js project to automatically extract user-facing UI strings for translation:
+### 1. Initialize QalSync in your React / Next.js app
 
 ```bash
-# Scan ./src directory and save strings to qalsync.strings.json
-npx qalsync-scan ./src
-
-# Scan AND auto-translate extracted strings via QalSync Batch API
-npx qalsync-scan ./src --translate --api-url http://localhost:3000 --project-id my-app --locale am
+npx qalsync init
 ```
 
-Programmatic usage in Node/TypeScript scripts:
+Creates `qalsync.config.ts` and a `messages/` folder in your project root:
 
 ```ts
-import { scanProjectStrings } from "@qalsync/client";
-
-const strings = scanProjectStrings("./src");
-console.log(`Found ${strings.length} UI strings for localization.`);
+// qalsync.config.ts
+export default {
+  sourceLocale: "en",
+  targetLocales: ["am", "om"],
+  messagesDir: "messages",
+  srcDir: "app", // or "src"
+  apiUrl: "http://localhost:3000",
+  projectId: "default",
+  approvedOnly: false,
+};
 ```
 
+### 2. Automatically Scan, AI-Translate & Sync
+
+```bash
+npx qalsync sync
+```
+
+**What it does:**
+1. Scans `.tsx` and `.jsx` files for user-facing UI text using an AST parser.
+2. Diffs extracted text against existing `messages/*.json` and Supabase DB cache.
+3. Sends **ONLY brand-new, untranslated strings** to Google Gemini AI.
+4. Merges generated translations directly into `messages/en.json`, `messages/am.json`, and `messages/om.json`.
+
+**Output Summary:**
+```text
+✓ Scanned 84 files
+✓ Found 312 strings
+✓ 287 already translated
+✓ 25 new strings sent to Gemini AI
+✓ Merged translations into messages/am.json and messages/om.json
+Done.
+```
+
+### 3. CI/CD Untranslated String Check
+
+Run in your GitHub Actions / CI build pipeline:
+
+```bash
+npx qalsync sync --check
+```
+
+Fails with exit code `1` if any untranslated or missing strings exist in the codebase.
+
+### 4. Optional Human Review Dashboard
+
+```bash
+npx qalsync review
+```
+
+Opens `http://localhost:3000/review` in your browser. Allows native speakers or translators to visually inspect, edit, and approve draft AI translations.
+
+---
 
 ## API Reference
 
 ### `POST /api/translate`
 
-Translate a single string or a batch of strings. Returns cached translations if available, otherwise calls Gemini and saves drafts.
+Translate a single string or a batch of strings. Returns cached translations if available, otherwise calls Gemini AI and saves draft rows.
 
 ```json
-// Single Request
-{ "text": "Hello, world!", "locale": "am", "projectId": "my-site" }
-
-// Single Response
-{ "translation": "ሰላም ዓለም!", "reviewed": true, "id": "uuid" }
-
 // Batch Request
-{ "texts": ["Hello", "Goodbye"], "locale": "am", "projectId": "my-site" }
+{
+  "texts": ["Welcome back", "Save Changes"],
+  "locale": "am",
+  "projectId": "my-app"
+}
 
 // Batch Response
 {
   "translations": {
-    "Hello": { "translation": "ሰላም", "reviewed": true, "id": "uuid-1" },
-    "Goodbye": { "translation": "ደህና ሁን", "reviewed": false, "id": "uuid-2" }
+    "Welcome back": { "translation": "እንኳን በደህና ተመለሱ", "reviewed": true, "id": "uuid-1" },
+    "Save Changes": { "translation": "ለውጦችን አስቀምጥ", "reviewed": false, "id": "uuid-2" }
   }
 }
 ```
 
-
 ### `GET /api/translations?projectId=...&locale=...&status=draft`
 
-List translations. All query params are optional filters.
+List translations with optional query filters.
 
 ### `PATCH /api/translations/:id`
 
-Update a translation and/or approve it.
+Update a translation text and/or mark it as `approved`.
 
-```json
-{ "translation": "Corrected text", "status": "approved" }
-```
+### `DELETE /api/translations/:id`
+
+Delete a translation entry.
+
+---
 
 ## Supported Languages
 
-| Code | Language     |
-|------|-------------|
+| Code | Language |
+|---|---|
 | `am` | Amharic (አማርኛ) |
-| `om` | Afaan Oromo  |
+| `om` | Afaan Oromo |
 
-More languages can be added by extending the prompt in `src/lib/gemini.ts`.
+More languages can be added by extending the prompt in `apps/backend/src/lib/gemini.ts`.
