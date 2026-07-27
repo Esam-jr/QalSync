@@ -1,4 +1,4 @@
-import { createClient, getAuthenticatedUser } from "@/lib/supabase";
+import { createRouteHandlerClient, getAuthenticatedUser } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -11,11 +11,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = createRouteHandlerClient(request);
 
     const { data, error } = await supabase
       .from("translations")
       .select("project_id");
+
 
 
 

@@ -1,4 +1,4 @@
-import { createClient, getAuthenticatedUser } from "@/lib/supabase";
+import { createRouteHandlerClient, getAuthenticatedUser } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -16,12 +16,13 @@ export async function GET(request: NextRequest) {
     const locale = searchParams.get("locale");
     const status = searchParams.get("status");
 
-    const supabase = createClient();
+    const supabase = createRouteHandlerClient(request);
 
     let query = supabase
       .from("translations")
       .select("*")
       .order("created_at", { ascending: false });
+
 
 
 

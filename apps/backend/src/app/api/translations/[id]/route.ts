@@ -1,4 +1,4 @@
-import { createClient, getAuthenticatedUser } from "@/lib/supabase";
+import { createRouteHandlerClient, getAuthenticatedUser } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
@@ -28,7 +28,7 @@ export async function PATCH(
       );
     }
 
-    const supabase = createClient();
+    const supabase = createRouteHandlerClient(request);
 
     const update: Record<string, string> = {};
     if (translation !== undefined) update.translation = translation;
@@ -40,8 +40,6 @@ export async function PATCH(
       .eq("id", id)
       .select()
       .single();
-
-
 
     if (error) {
       return NextResponse.json(
@@ -81,19 +79,25 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const supabase = createClient();
+    const supabase = createRouteHandlerClient(request);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("translations")
       .delete()
-      .eq("id", id);
-
-
+      .eq("id", id)
+      .select();
 
     if (error) {
       return NextResponse.json(
         { error: "Failed to delete translation", details: error.message },
         { status: 500 }
+      );
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: "Translation not found or permission denied" },
+        { status: 404 }
       );
     }
 
@@ -106,4 +110,5 @@ export async function DELETE(
     );
   }
 }
+
 
