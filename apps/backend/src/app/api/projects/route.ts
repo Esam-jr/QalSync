@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("translations")
-      .select("project_id")
-      .or(`user_id.eq.${user.id},user_id.is.null`);
+      .select("project_id");
+
 
 
     if (error) {

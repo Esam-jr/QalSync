@@ -130,7 +130,7 @@ export default function ReviewPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Auth
+  // Auth state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -138,10 +138,13 @@ export default function ReviewPage() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // Dashboard state
-  const [projectId, setProjectId] = useState("all");
+  // Mandatory Project Selection state
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [availableProjects, setAvailableProjects] = useState<string[]>(["all", "default"]);
-  const [isCustomProject, setIsCustomProject] = useState(false);
+  const [comboboxSearch, setComboboxSearch] = useState("");
+
+  // Dashboard state
   const [locale, setLocale] = useState("am");
   const [statusTab, setStatusTab] = useState<"draft" | "approved" | "all">("draft");
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,7 +167,7 @@ export default function ReviewPage() {
     type: "success" | "error";
   } | null>(null);
 
-  /* ── Auth lifecycle ── */
+  /* ── Auth & LocalStorage Initialization ── */
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -180,6 +183,18 @@ export default function ReviewPage() {
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedProject = localStorage.getItem("qalsync_active_project_id");
+      if (savedProject) {
+        setSelectedProject(savedProject);
+        setIsProjectModalOpen(false);
+      } else {
+        setIsProjectModalOpen(true);
+      }
+    }
+  }, []);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -201,6 +216,14 @@ export default function ReviewPage() {
     }
   }, [session, fetchProjects]);
 
+  const selectProject = (id: string) => {
+    const trimmed = id.trim();
+    if (!trimmed) return;
+    setSelectedProject(trimmed);
+    localStorage.setItem("qalsync_active_project_id", trimmed);
+    setIsProjectModalOpen(false);
+    setComboboxSearch("");
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +263,7 @@ export default function ReviewPage() {
   /* ── Fetch translations ── */
 
   const fetchTranslations = useCallback(async () => {
+    if (!selectedProject) return;
     setFetchError("");
     setFetchLoading(true);
     setRowErrors([]);
@@ -247,7 +271,7 @@ export default function ReviewPage() {
 
     try {
       const params = new URLSearchParams({
-        projectId,
+        projectId: selectedProject,
         locale,
         status: statusTab,
       });
@@ -274,13 +298,15 @@ export default function ReviewPage() {
     } finally {
       setFetchLoading(false);
     }
-  }, [projectId, locale, statusTab]);
+  }, [selectedProject, locale, statusTab]);
 
   useEffect(() => {
-    if (session) fetchTranslations();
-  }, [session, fetchTranslations]);
+    if (session && selectedProject && !isProjectModalOpen) {
+      fetchTranslations();
+    }
+  }, [session, selectedProject, isProjectModalOpen, fetchTranslations]);
 
-  /* ── Computed Filtered Rows ── */
+  /* ── Computed Filtered Rows & Combobox Results ── */
 
   const filteredTranslations = useMemo(() => {
     if (!searchQuery.trim()) return translations;
@@ -291,6 +317,17 @@ export default function ReviewPage() {
         (t.translation && t.translation.toLowerCase().includes(q))
     );
   }, [translations, searchQuery]);
+
+  const filteredProjectsForCombobox = useMemo(() => {
+    const q = comboboxSearch.toLowerCase().trim();
+    if (!q) return availableProjects;
+    return availableProjects.filter((p) => p.toLowerCase().includes(q));
+  }, [availableProjects, comboboxSearch]);
+
+  const exactMatchExists = useMemo(() => {
+    const q = comboboxSearch.trim().toLowerCase();
+    return availableProjects.some((p) => p.toLowerCase() === q);
+  }, [availableProjects, comboboxSearch]);
 
   /* ── Selection Helpers ── */
 
@@ -311,7 +348,7 @@ export default function ReviewPage() {
     });
   };
 
-  /* ── Approve single translation ── */
+  /* ── Actions ── */
 
   const handleApprove = async (id: string) => {
     setRowErrors((prev) => prev.filter((e) => e.id !== id));
@@ -372,8 +409,6 @@ export default function ReviewPage() {
     }
   };
 
-  /* ── Delete single translation ── */
-
   const handleDelete = async (id: string) => {
     setRowErrors((prev) => prev.filter((e) => e.id !== id));
     setDeletingIds((prev) => new Set(prev).add(id));
@@ -417,8 +452,6 @@ export default function ReviewPage() {
     }
   };
 
-  /* ── Bulk Actions ── */
-
   const handleBulkApprove = async () => {
     if (selectedIds.size === 0) return;
     setBulkLoading(true);
@@ -441,7 +474,7 @@ export default function ReviewPage() {
 
         if (res.ok) successCount++;
       } catch {
-        // Continue best-effort bulk approve
+        // Best effort
       }
     }
 
@@ -467,7 +500,7 @@ export default function ReviewPage() {
         });
         if (res.ok) successCount++;
       } catch {
-        // Continue best-effort bulk delete
+        // Best effort
       }
     }
 
@@ -599,8 +632,10 @@ export default function ReviewPage() {
     );
   }
 
+  const showModal = !selectedProject || isProjectModalOpen;
+
   return (
-    <main className="min-h-screen bg-void px-4 py-8">
+    <main className="min-h-screen bg-void px-4 py-8 relative">
       {toast && (
         <Toast
           message={toast.message}
@@ -609,7 +644,108 @@ export default function ReviewPage() {
         />
       )}
 
-      <div className="mx-auto max-w-5xl">
+      {/* Mandatory Project Selection Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+          <div className="w-full max-w-md rounded-xl border border-ash bg-obsidian p-6 shadow-2xl">
+            <div className="mb-5 text-center">
+              <span className="mb-2 inline-block text-2xl">🔒</span>
+              <h2 className="text-xl font-bold text-ivory">
+                Select Project to Review
+              </h2>
+              <p className="mt-1.5 text-xs text-silver">
+                Search existing projects or type a new Project ID to unlock your dashboard.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-1.5 block text-xs font-medium text-silver">
+                Search or Enter Project ID
+              </label>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (comboboxSearch.trim()) selectProject(comboboxSearch);
+                }}
+              >
+                <div className="relative">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Type to search or enter Project ID..."
+                    value={comboboxSearch}
+                    onChange={(e) => setComboboxSearch(e.target.value)}
+                    className="w-full rounded-lg border border-ash bg-onyx px-3.5 py-2.5 text-sm text-ivory placeholder-smoke outline-none transition-colors focus:border-crimson"
+                  />
+                  {comboboxSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setComboboxSearch("")}
+                      className="absolute right-3 top-2.5 text-xs text-silver hover:text-ivory"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Combobox Results List */}
+            <div className="max-h-56 overflow-y-auto rounded-lg border border-ash bg-onyx divide-y divide-ash/40">
+              {comboboxSearch.trim() && !exactMatchExists && (
+                <button
+                  type="button"
+                  onClick={() => selectProject(comboboxSearch)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-blood-glow hover:bg-obsidian transition-colors hover:cursor-pointer"
+                >
+                  <span>➕</span>
+                  <span>Use custom project ID: &quot;{comboboxSearch.trim()}&quot;</span>
+                </button>
+              )}
+
+              {filteredProjectsForCombobox.length === 0 && exactMatchExists && (
+                <div className="p-4 text-center text-xs text-smoke">
+                  No projects found.
+                </div>
+              )}
+
+              {filteredProjectsForCombobox.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => selectProject(p)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-obsidian hover:cursor-pointer ${
+                    selectedProject === p
+                      ? "bg-obsidian text-blood font-semibold"
+                      : "text-ivory"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-silver text-xs">📁</span>
+                    {p === "all" ? "All Projects" : p}
+                  </span>
+                  {selectedProject === p && <span className="text-xs text-blood">✓ Active</span>}
+                </button>
+              ))}
+            </div>
+
+            {selectedProject && (
+              <div className="mt-5 border-t border-ash pt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsProjectModalOpen(false)}
+                  className="rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:text-ivory hover:cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Dashboard UI (Blurred when modal is open) */}
+      <div className={`mx-auto max-w-5xl transition-all ${showModal ? "blur-sm pointer-events-none" : ""}`}>
         {/* Header */}
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -620,12 +756,33 @@ export default function ReviewPage() {
               </span>
             </h1>
           </div>
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-ash bg-onyx px-4 py-2 text-sm text-silver transition-colors hover:border-crimson hover:text-ivory hover:cursor-pointer"
-          >
-            Log Out
-          </button>
+
+          <div className="flex items-center gap-3">
+            {selectedProject && (
+              <div className="flex items-center gap-2 rounded-lg border border-ash bg-obsidian px-3 py-1.5 text-xs text-ivory">
+                <span className="text-silver">Active Project:</span>
+                <span className="font-semibold text-blood-glow">
+                  {selectedProject === "all" ? "All Projects" : selectedProject}
+                </span>
+                <button
+                  onClick={() => {
+                    fetchProjects();
+                    setIsProjectModalOpen(true);
+                  }}
+                  className="ml-2 rounded border border-ash bg-onyx px-2 py-0.5 text-[10px] text-silver hover:border-crimson hover:text-ivory transition-colors hover:cursor-pointer"
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-ash bg-onyx px-4 py-2 text-sm text-silver transition-colors hover:border-crimson hover:text-ivory hover:cursor-pointer"
+            >
+              Log Out
+            </button>
+          </div>
         </div>
 
         {/* Status Tabs */}
@@ -666,7 +823,7 @@ export default function ReviewPage() {
 
         {/* Filters & Search bar */}
         <div className="mb-6 flex flex-wrap items-end gap-4 rounded-xl border border-ash bg-obsidian p-4">
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[240px]">
             <label className="mb-1.5 block text-xs font-medium text-silver">
               Search Strings
             </label>
@@ -689,54 +846,6 @@ export default function ReviewPage() {
             </div>
           </div>
 
-          <div className="min-w-[180px]">
-            <label className="mb-1.5 block text-xs font-medium text-silver">
-              Project ID
-            </label>
-            {!isCustomProject ? (
-              <select
-                value={projectId}
-                onChange={(e) => {
-                  if (e.target.value === "__custom__") {
-                    setIsCustomProject(true);
-                    setProjectId("");
-                  } else {
-                    setProjectId(e.target.value);
-                  }
-                }}
-                className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson hover:cursor-pointer"
-              >
-                {availableProjects.map((p) => (
-                  <option key={p} value={p}>
-                    {p === "all" ? "All Projects" : p}
-                  </option>
-                ))}
-                <option value="__custom__">+ Custom Project ID...</option>
-              </select>
-            ) : (
-              <div className="relative">
-                <input
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  placeholder="Enter Project ID..."
-                  className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 pr-7 text-sm text-ivory outline-none transition-colors focus:border-crimson"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomProject(false);
-                    setProjectId("all");
-                  }}
-                  className="absolute right-2 top-2 text-xs text-silver hover:text-ivory"
-                  title="Back to dropdown"
-                >
-                  ↩
-                </button>
-              </div>
-            )}
-          </div>
-
-
           <div className="min-w-[160px]">
             <label className="mb-1.5 block text-xs font-medium text-silver">
               Target Language
@@ -744,7 +853,7 @@ export default function ReviewPage() {
             <select
               value={locale}
               onChange={(e) => setLocale(e.target.value)}
-              className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson"
+              className="w-full rounded-lg border border-ash bg-onyx px-3 py-2 text-sm text-ivory outline-none transition-colors focus:border-crimson hover:cursor-pointer"
             >
               <option value="am">Amharic (አማርኛ)</option>
               <option value="om">Afaan Oromo</option>

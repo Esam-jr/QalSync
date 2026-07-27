@@ -10,7 +10,6 @@ export type TranslationRow = {
   translation: string | null;
   status: "draft" | "approved";
   project_id: string;
-  user_id?: string | null;
   created_at: string;
   updated_at: string;
 };

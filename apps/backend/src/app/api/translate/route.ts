@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
           translation,
           status: "draft",
           project_id: projectId,
-          user_id: user?.id ?? null,
         })
+
         .select()
         .single();
 
@@ -147,8 +147,8 @@ export async function POST(request: NextRequest) {
         translation: generatedMap[t] ?? t,
         status: "draft",
         project_id: projectId,
-        user_id: user?.id ?? null,
       }));
+
 
 
       const { data: insertedRows, error: insertBatchError } = await supabase
