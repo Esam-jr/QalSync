@@ -8,6 +8,8 @@ import { translateBatch } from "./index.js";
 import { loadConfig, generateDefaultConfigFile, type QalSyncConfig } from "./config.js";
 import { JsonManager } from "./json-manager.js";
 
+import * as readline from "readline";
+
 function printHelp() {
   console.log(`
 QalSync CLI — Zero-friction localization toolchain for React & Next.js
@@ -24,13 +26,14 @@ Commands:
 Options:
   --check               CI mode for sync: exits code 1 if untranslated strings exist
   --dir, -d <path>      Source directory to scan (default: from config or ./app)
-  --locale, -l <code>   Target locale override (e.g. am, om)
+  --locale, -l <code>   Target locale override or selection (e.g. am, om, ti)
   --project-id <id>     Project ID override (default: from config)
   --api-url <url>       QalSync API URL override (default: http://localhost:3000)
   --help, -h            Show this help message
 
 Examples:
   npx qalsync init
+  npx qalsync init -l am,ti
   npx qalsync sync
   npx qalsync sync --check
   npx qalsync review
@@ -53,16 +56,65 @@ function openBrowser(url: string) {
   });
 }
 
-async function handleInit(projectRoot: string) {
+async function promptLocales(): Promise<string[]> {
+  if (!process.stdin.isTTY) {
+    return ["am", "om", "ti"];
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  console.log("\n🌐 Select target languages to support:");
+  console.log("  1) All: Amharic (am), Afaan Oromo (om), Tigrinya (ti) [Default]");
+  console.log("  2) Amharic (am) & Afaan Oromo (om)");
+  console.log("  3) Amharic (am) & Tigrinya (ti)");
+  console.log("  4) Amharic (am) only");
+  console.log("  5) Afaan Oromo (om) only");
+  console.log("  6) Tigrinya (ti) only");
+  console.log("  7) Custom (enter comma-separated codes, e.g. am,ti)\n");
+
+  return new Promise((resolve) => {
+    rl.question("Enter choice (1-7) [1]: ", (answer) => {
+      rl.close();
+      const choice = answer.trim();
+      if (choice === "2") resolve(["am", "om"]);
+      else if (choice === "3") resolve(["am", "ti"]);
+      else if (choice === "4") resolve(["am"]);
+      else if (choice === "5") resolve(["om"]);
+      else if (choice === "6") resolve(["ti"]);
+      else if (choice === "7" || choice.includes(",")) {
+        const codes = choice.split(",").map((c) => c.trim()).filter(Boolean);
+        resolve(codes.length > 0 ? codes : ["am", "om", "ti"]);
+      } else {
+        resolve(["am", "om", "ti"]);
+      }
+    });
+  });
+}
+
+async function handleInit(projectRoot: string, localesOverride?: string) {
   console.log("⚙️  [QalSync] Initializing QalSync configuration...");
-  const configPath = generateDefaultConfigFile(projectRoot);
+
+  let targetLocales: string[] = ["am", "om", "ti"];
+
+  if (localesOverride) {
+    targetLocales = localesOverride.split(",").map((s) => s.trim()).filter(Boolean);
+  } else {
+    targetLocales = await promptLocales();
+  }
+
+  const configPath = generateDefaultConfigFile(projectRoot, { targetLocales });
   const jsonManager = new JsonManager("messages");
   jsonManager.ensureMessagesDirExists();
 
+  console.log(`\n✅ Target languages configured: ${targetLocales.join(", ")}`);
   console.log(`✅ Created configuration file: ${configPath}`);
   console.log(`✅ Ensured messages directory: ${path.resolve(projectRoot, "messages")}`);
   console.log("\nNext step: Run 'npx qalsync sync' to extract & translate UI strings!");
 }
+
 
 async function handleSync(
   projectRoot: string,
@@ -199,8 +251,9 @@ async function main() {
 
   switch (command) {
     case "init":
-      await handleInit(projectRoot);
+      await handleInit(projectRoot, localeOverride);
       break;
+
 
     case "sync":
       const isCheckOnly = args.includes("--check");

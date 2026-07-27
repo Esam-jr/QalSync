@@ -161,5 +161,7 @@ Delete a translation entry.
 |---|---|
 | `am` | Amharic (አማርኛ) |
 | `om` | Afaan Oromo |
+| `ti` | Tigrinya (ትግርኛ) |
+
 
 More languages can be added by extending the prompt in `apps/backend/src/lib/gemini.ts`.

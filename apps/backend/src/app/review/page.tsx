@@ -787,8 +787,10 @@ export default function ReviewPage() {
             >
               <option value="am">Amharic (አማርኛ)</option>
               <option value="om">Afaan Oromo</option>
+              <option value="ti">Tigrinya (ትግርኛ)</option>
             </select>
           </div>
+
 
           <button
             onClick={fetchTranslations}
@@ -941,8 +943,9 @@ export default function ReviewPage() {
                     <div>
                       <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-smoke">
                         Translation ·{" "}
-                        {t.locale === "am" ? "አማርኛ" : "Afaan Oromo"}
+                        {t.locale === "am" ? "አማርኛ" : t.locale === "ti" ? "ትግርኛ" : "Afaan Oromo"}
                       </span>
+
                       <textarea
                         defaultValue={t.translation ?? ""}
                         onChange={(e) =>

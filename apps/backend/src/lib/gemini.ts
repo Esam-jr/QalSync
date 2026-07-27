@@ -3,7 +3,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const LANGUAGE_NAMES: Record<string, string> = {
   am: "Amharic (አማርኛ)",
   om: "Afaan Oromo",
+  ti: "Tigrinya (ትግርኛ)",
 };
+
 
 let genAI: GoogleGenerativeAI | null = null;
 

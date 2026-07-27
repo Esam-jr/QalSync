@@ -13,8 +13,9 @@ export interface QalSyncConfig {
 
 export const DEFAULT_CONFIG: QalSyncConfig = {
   sourceLocale: "en",
-  targetLocales: ["am", "om"],
+  targetLocales: ["am", "om", "ti"],
   messagesDir: "messages",
+
   srcDir: "app",
   apiUrl: process.env.QALSYNC_API_URL ?? "http://localhost:3000",
   projectId: process.env.QALSYNC_PROJECT_ID ?? "default",
