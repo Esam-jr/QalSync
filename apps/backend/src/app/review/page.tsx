@@ -141,8 +141,7 @@ export default function ReviewPage() {
   // Mandatory Project Selection state
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [availableProjects, setAvailableProjects] = useState<string[]>(["all", "default"]);
-  const [comboboxSearch, setComboboxSearch] = useState("");
+  const [projectIdInput, setProjectIdInput] = useState("");
 
   // Dashboard state
   const [locale, setLocale] = useState("am");
@@ -189,6 +188,7 @@ export default function ReviewPage() {
       const savedProject = localStorage.getItem("qalsync_active_project_id");
       if (savedProject) {
         setSelectedProject(savedProject);
+        setProjectIdInput(savedProject);
         setIsProjectModalOpen(false);
       } else {
         setIsProjectModalOpen(true);
@@ -196,34 +196,15 @@ export default function ReviewPage() {
     }
   }, []);
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      const res = await fetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.projects && Array.isArray(data.projects)) {
-          setAvailableProjects(data.projects);
-        }
-      }
-    } catch {
-      // Ignore fallback
-    }
-  }, []);
-
-  useEffect(() => {
-    if (session) {
-      fetchProjects();
-    }
-  }, [session, fetchProjects]);
-
   const selectProject = (id: string) => {
     const trimmed = id.trim();
     if (!trimmed) return;
     setSelectedProject(trimmed);
+    setProjectIdInput(trimmed);
     localStorage.setItem("qalsync_active_project_id", trimmed);
     setIsProjectModalOpen(false);
-    setComboboxSearch("");
   };
+
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,18 +299,8 @@ export default function ReviewPage() {
     );
   }, [translations, searchQuery]);
 
-  const filteredProjectsForCombobox = useMemo(() => {
-    const q = comboboxSearch.toLowerCase().trim();
-    if (!q) return availableProjects;
-    return availableProjects.filter((p) => p.toLowerCase().includes(q));
-  }, [availableProjects, comboboxSearch]);
-
-  const exactMatchExists = useMemo(() => {
-    const q = comboboxSearch.trim().toLowerCase();
-    return availableProjects.some((p) => p.toLowerCase() === q);
-  }, [availableProjects, comboboxSearch]);
-
   /* ── Selection Helpers ── */
+
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredTranslations.length) {
@@ -651,95 +622,56 @@ export default function ReviewPage() {
             <div className="mb-5 text-center">
               <span className="mb-2 inline-block text-2xl">🔒</span>
               <h2 className="text-xl font-bold text-ivory">
-                Select Project to Review
+                Enter Project ID to Review
               </h2>
               <p className="mt-1.5 text-xs text-silver">
-                Search existing projects or type a new Project ID to unlock your dashboard.
+                Please enter your Project ID to unlock your translation dashboard.
               </p>
             </div>
 
-            <div className="mb-4">
-              <label className="mb-1.5 block text-xs font-medium text-silver">
-                Search or Enter Project ID
-              </label>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (comboboxSearch.trim()) selectProject(comboboxSearch);
-                }}
-              >
-                <div className="relative">
-                  <input
-                    type="text"
-                    autoFocus
-                    placeholder="Type to search or enter Project ID..."
-                    value={comboboxSearch}
-                    onChange={(e) => setComboboxSearch(e.target.value)}
-                    className="w-full rounded-lg border border-ash bg-onyx px-3.5 py-2.5 text-sm text-ivory placeholder-smoke outline-none transition-colors focus:border-crimson"
-                  />
-                  {comboboxSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setComboboxSearch("")}
-                      className="absolute right-3 top-2.5 text-xs text-silver hover:text-ivory"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </form>
-            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (projectIdInput.trim()) selectProject(projectIdInput);
+              }}
+              className="flex flex-col gap-4"
+            >
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-silver">
+                  Project ID
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="e.g. storefront-web or default"
+                  value={projectIdInput}
+                  onChange={(e) => setProjectIdInput(e.target.value)}
+                  className="w-full rounded-lg border border-ash bg-onyx px-3.5 py-2.5 text-sm text-ivory placeholder-smoke outline-none transition-colors focus:border-crimson"
+                />
+                <p className="mt-2 text-xs leading-relaxed text-smoke bg-onyx/50 p-2.5 rounded-lg border border-ash/40">
+                  💡 <span className="font-semibold text-silver">Note:</span> You can find your Project ID name in your project&apos;s generated QalSync configuration file (<code className="text-blood-glow font-mono">qalsync.config.ts</code>).
+                </p>
+              </div>
 
-            {/* Combobox Results List */}
-            <div className="max-h-56 overflow-y-auto rounded-lg border border-ash bg-onyx divide-y divide-ash/40">
-              {comboboxSearch.trim() && !exactMatchExists && (
+              <div className="flex items-center justify-end gap-3 pt-2">
+                {selectedProject && (
+                  <button
+                    type="button"
+                    onClick={() => setIsProjectModalOpen(false)}
+                    className="rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:text-ivory hover:cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
-                  type="button"
-                  onClick={() => selectProject(comboboxSearch)}
-                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-blood-glow hover:bg-obsidian transition-colors hover:cursor-pointer"
+                  type="submit"
+                  disabled={!projectIdInput.trim()}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-blood px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blood/20 transition-all hover:bg-blood-glow disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
                 >
-                  <span>➕</span>
-                  <span>Use custom project ID: &quot;{comboboxSearch.trim()}&quot;</span>
-                </button>
-              )}
-
-              {filteredProjectsForCombobox.length === 0 && exactMatchExists && (
-                <div className="p-4 text-center text-xs text-smoke">
-                  No projects found.
-                </div>
-              )}
-
-              {filteredProjectsForCombobox.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => selectProject(p)}
-                  className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-obsidian hover:cursor-pointer ${
-                    selectedProject === p
-                      ? "bg-obsidian text-blood font-semibold"
-                      : "text-ivory"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-silver text-xs">📁</span>
-                    {p === "all" ? "All Projects" : p}
-                  </span>
-                  {selectedProject === p && <span className="text-xs text-blood">✓ Active</span>}
-                </button>
-              ))}
-            </div>
-
-            {selectedProject && (
-              <div className="mt-5 border-t border-ash pt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsProjectModalOpen(false)}
-                  className="rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:text-ivory hover:cursor-pointer"
-                >
-                  Cancel
+                  Continue to Dashboard →
                 </button>
               </div>
-            )}
+            </form>
           </div>
         </div>
       )}
@@ -765,16 +697,14 @@ export default function ReviewPage() {
                   {selectedProject === "all" ? "All Projects" : selectedProject}
                 </span>
                 <button
-                  onClick={() => {
-                    fetchProjects();
-                    setIsProjectModalOpen(true);
-                  }}
+                  onClick={() => setIsProjectModalOpen(true)}
                   className="ml-2 rounded border border-ash bg-onyx px-2 py-0.5 text-[10px] text-silver hover:border-crimson hover:text-ivory transition-colors hover:cursor-pointer"
                 >
                   Switch
                 </button>
               </div>
             )}
+
 
             <button
               onClick={handleLogout}

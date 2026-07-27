@@ -79,7 +79,28 @@ export function generateDefaultConfigFile(
   projectRoot: string = process.cwd(),
   overrides: Partial<QalSyncConfig> = {}
 ): string {
-  const config = { ...DEFAULT_CONFIG, ...overrides };
+  let detectedProjectId = "my-app";
+
+  try {
+    const pkgPath = path.resolve(projectRoot, "package.json");
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      if (pkg.name) {
+        // Sanitize package name (remove scope @org/name -> name)
+        detectedProjectId = pkg.name.replace(/^@[^/]+\//, "").replace(/[^a-zA-Z0-9_-]/g, "-");
+      }
+    } else {
+      detectedProjectId = path.basename(projectRoot).replace(/[^a-zA-Z0-9_-]/g, "-");
+    }
+  } catch {
+    // Fallback
+  }
+
+  const config = {
+    ...DEFAULT_CONFIG,
+    projectId: detectedProjectId,
+    ...overrides,
+  };
   const targetLocalesStr = JSON.stringify(config.targetLocales);
 
   const fileContent = `// QalSync Configuration File

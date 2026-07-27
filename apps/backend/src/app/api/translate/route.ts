@@ -62,17 +62,20 @@ export async function POST(request: NextRequest) {
 
       const { data: inserted, error: insertError } = await supabase
         .from("translations")
-        .insert({
-          source_text: text,
-          source_hash: sourceHash,
-          locale,
-          translation,
-          status: "draft",
-          project_id: projectId,
-        })
-
+        .upsert(
+          {
+            source_text: text,
+            source_hash: sourceHash,
+            locale,
+            translation,
+            status: "draft",
+            project_id: projectId,
+          },
+          { onConflict: "source_hash,locale,project_id" }
+        )
         .select()
         .single();
+
 
 
       if (insertError) {
@@ -153,10 +156,13 @@ export async function POST(request: NextRequest) {
 
       const { data: insertedRows, error: insertBatchError } = await supabase
         .from("translations")
-        .insert(rowsToInsert)
+        .upsert(rowsToInsert, {
+          onConflict: "source_hash,locale,project_id",
+        })
         .select();
 
       if (insertBatchError) {
+        console.error("[QalSync API] Batch upsert error:", insertBatchError.message);
         return NextResponse.json(
           { error: "Failed to save batch translations", details: insertBatchError.message },
           { status: 500 }
@@ -178,6 +184,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ translations: resultMap });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[QalSync API Exception]:", err);
     const isQuotaError =
       message.includes("429") ||
       message.includes("Quota exceeded") ||
@@ -198,4 +205,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
 }
