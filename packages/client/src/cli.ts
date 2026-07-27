@@ -2,142 +2,231 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { exec } from "child_process";
 import { scanProjectStrings } from "./scanner.js";
 import { translateBatch } from "./index.js";
-
-
-function parseArgs(args: string[]) {
-  const options: Record<string, string | boolean> = {
-    dir: "./",
-    out: "qalsync.strings.json",
-    translate: false,
-    apiUrl: process.env.QALSYNC_API_URL ?? "http://localhost:3000",
-    projectId: process.env.QALSYNC_PROJECT_ID ?? "default",
-    locale: process.env.QALSYNC_LOCALE ?? "am",
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    if (arg === "--help" || arg === "-h") {
-      options.help = true;
-    } else if (arg === "--translate" || arg === "-t") {
-      options.translate = true;
-    } else if (arg === "--out" || arg === "-o") {
-      options.out = args[++i];
-    } else if (arg === "--dir" || arg === "-d") {
-      options.dir = args[++i];
-    } else if (arg === "--api-url") {
-      options.apiUrl = args[++i];
-    } else if (arg === "--project-id") {
-      options.projectId = args[++i];
-    } else if (arg === "--locale" || arg === "-l") {
-      options.locale = args[++i];
-    } else if (!arg.startsWith("-") && i === 0) {
-      options.dir = arg;
-    }
-  }
-
-  return options;
-}
+import { loadConfig, generateDefaultConfigFile, type QalSyncConfig } from "./config.js";
+import { JsonManager } from "./json-manager.js";
 
 function printHelp() {
   console.log(`
-QalSync Codebase Scanner CLI
-
-Scans .tsx, .jsx, .ts, and .js files in a React/Next.js codebase and extracts user-facing strings for localization.
+QalSync CLI — Zero-friction localization toolchain for React & Next.js
 
 Usage:
-  npx qalsync-scan [dir] [options]
+  npx qalsync [command] [options]
+
+Commands:
+  init                  Initialize qalsync.config.ts and messages/ directory
+  sync                  Scan codebase, diff strings, translate new text, merge JSON files
+  review (or dashboard) Open the QalSync human review dashboard in your browser
+  scan                  Scan codebase text and save raw strings JSON
 
 Options:
-  --dir, -d <path>      Directory to scan (default: current directory or ./src)
-  --out, -o <filename>  Output JSON filename (default: qalsync.strings.json)
-  --translate, -t       Automatically translate extracted strings via QalSync API
-  --api-url <url>       QalSync API URL (default: http://localhost:3000)
-  --project-id <id>     Project ID (default: default)
-  --locale, -l <code>   Target locale (default: am)
+  --check               CI mode for sync: exits code 1 if untranslated strings exist
+  --dir, -d <path>      Source directory to scan (default: from config or ./app)
+  --locale, -l <code>   Target locale override (e.g. am, om)
+  --project-id <id>     Project ID override (default: from config)
+  --api-url <url>       QalSync API URL override (default: http://localhost:3000)
   --help, -h            Show this help message
 
 Examples:
-  npx qalsync-scan ./src
-  npx qalsync-scan ./src --out strings.json
-  npx qalsync-scan ./src --translate --locale am --project-id my-app
+  npx qalsync init
+  npx qalsync sync
+  npx qalsync sync --check
+  npx qalsync review
 `);
+}
+
+function openBrowser(url: string) {
+  console.log(`🚀 Opening QalSync Review Dashboard at: ${url}`);
+  const command =
+    process.platform === "win32"
+      ? `start "" "${url}"`
+      : process.platform === "darwin"
+        ? `open "${url}"`
+        : `xdg-open "${url}"`;
+
+  exec(command, (err) => {
+    if (err) {
+      console.log(`🔗 Open dashboard manually at: ${url}`);
+    }
+  });
+}
+
+async function handleInit(projectRoot: string) {
+  console.log("⚙️  [QalSync] Initializing QalSync configuration...");
+  const configPath = generateDefaultConfigFile(projectRoot);
+  const jsonManager = new JsonManager("messages");
+  jsonManager.ensureMessagesDirExists();
+
+  console.log(`✅ Created configuration file: ${configPath}`);
+  console.log(`✅ Ensured messages directory: ${path.resolve(projectRoot, "messages")}`);
+  console.log("\nNext step: Run 'npx qalsync sync' to extract & translate UI strings!");
+}
+
+async function handleSync(
+  projectRoot: string,
+  config: QalSyncConfig,
+  isCheckOnly: boolean,
+  localeOverride?: string
+) {
+  const targetDir = path.resolve(projectRoot, config.srcDir || "app");
+  const fallbackDir = fs.existsSync(targetDir)
+    ? targetDir
+    : path.resolve(projectRoot, "src");
+
+  if (!fs.existsSync(fallbackDir)) {
+    console.error(`❌ Source directory not found: ${targetDir} or ${fallbackDir}`);
+    process.exit(1);
+  }
+
+  console.log(`🔍 [QalSync] Scanning codebase at: ${fallbackDir}`);
+  const extractedStrings = scanProjectStrings(fallbackDir);
+  console.log(`✨ Found ${extractedStrings.length} total UI strings.`);
+
+  const jsonManager = new JsonManager(config.messagesDir);
+  jsonManager.ensureMessagesDirExists();
+
+  // 1. Sync source locale dictionary (en.json)
+  const newSourceCount = jsonManager.syncSourceDictionary(
+    extractedStrings,
+    config.sourceLocale
+  );
+  if (newSourceCount > 0) {
+    console.log(`📁 Added ${newSourceCount} new source strings to ${config.messagesDir}/${config.sourceLocale}.json`);
+  }
+
+  const targetLocales = localeOverride
+    ? [localeOverride]
+    : config.targetLocales;
+
+  let totalUntranslatedCount = 0;
+  const missingByLocale: Record<string, string[]> = {};
+
+  for (const locale of targetLocales) {
+    const untranslated = jsonManager.findUntranslatedStrings(
+      extractedStrings,
+      locale
+    );
+
+    if (untranslated.length > 0) {
+      totalUntranslatedCount += untranslated.length;
+      missingByLocale[locale] = untranslated;
+    }
+  }
+
+  if (isCheckOnly) {
+    if (totalUntranslatedCount > 0) {
+      console.error(
+        `\n❌ [QalSync CI Check Failed] Found ${totalUntranslatedCount} untranslated strings across locales:`
+      );
+      for (const [loc, missing] of Object.entries(missingByLocale)) {
+        console.error(`  - [${loc}]: ${missing.length} missing strings (e.g. "${missing[0]}")`);
+      }
+      console.error("\nRun 'npx qalsync sync' locally to translate missing strings.");
+      process.exit(1);
+    } else {
+      console.log("\n✅ [QalSync CI Check Passed] All codebase UI strings are fully translated!");
+      process.exit(0);
+    }
+  }
+
+  // 2. Perform AI translations for untranslated strings
+  for (const locale of targetLocales) {
+    const untranslated = missingByLocale[locale] || [];
+
+    if (untranslated.length === 0) {
+      console.log(`✓ [${locale}] All ${extractedStrings.length} strings already translated in ${config.messagesDir}/${locale}.json`);
+      continue;
+    }
+
+    console.log(
+      `🌐 [${locale}] Translating ${untranslated.length} new strings via Gemini AI (project: '${config.projectId}')...`
+    );
+
+    try {
+      const translationMap = await translateBatch(untranslated, locale, {
+        apiUrl: config.apiUrl,
+        projectId: config.projectId,
+      });
+
+      const { total, merged } = jsonManager.mergeTranslations(
+        translationMap,
+        locale
+      );
+
+      console.log(
+        `✅ [${locale}] Merged ${merged} new translations into ${config.messagesDir}/${locale}.json (Total: ${total})`
+      );
+    } catch (err) {
+      console.error(
+        `❌ [${locale}] Translation failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  console.log("\n=========================================================");
+  console.log("✅ QALSYNC SYNC COMPLETE");
+  console.log("=========================================================");
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  const opts = parseArgs(args);
+  const command = args[0] && !args[0].startsWith("-") ? args[0] : "sync";
+  const projectRoot = process.cwd();
+  const config = loadConfig(projectRoot);
 
-  if (opts.help) {
+  if (args.includes("--help") || args.includes("-h")) {
     printHelp();
     process.exit(0);
   }
 
-  const targetDir = path.resolve(String(opts.dir));
-  console.log(`🔍 [QalSync] Scanning codebase at: ${targetDir}`);
-
-  if (!fs.existsSync(targetDir)) {
-    console.error(`❌ Directory not found: ${targetDir}`);
-    process.exit(1);
-  }
-
-  const extractedStrings = scanProjectStrings(targetDir);
-  console.log(`✨ Found ${extractedStrings.length} translatable strings.`);
-
-  const outputPath = path.resolve(String(opts.out));
-
-  if (opts.translate) {
-    console.log(
-      `🌐 Auto-translating ${extractedStrings.length} strings to locale '${opts.locale}' using project '${opts.projectId}'...`
-    );
-
-    try {
-      const translationMap = await translateBatch(
-        extractedStrings,
-        String(opts.locale),
-        {
-          apiUrl: String(opts.apiUrl),
-          projectId: String(opts.projectId),
-        }
-      );
-
-      const outputData = {
-        locale: opts.locale,
-        projectId: opts.projectId,
-        count: extractedStrings.length,
-        translations: translationMap,
-      };
-
-      fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2), "utf-8");
-      console.log(
-        `✅ Successfully auto-translated and saved results to: ${outputPath}`
-      );
-    } catch (err) {
-      console.error(
-        `❌ Auto-translation failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-      // Fallback: save raw extracted strings
-      saveStringsJson(extractedStrings, outputPath);
+  // Parse command line overrides
+  let localeOverride: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--locale" || args[i] === "-l") {
+      localeOverride = args[++i];
+    } else if (args[i] === "--api-url") {
+      config.apiUrl = args[++i];
+    } else if (args[i] === "--project-id") {
+      config.projectId = args[++i];
+    } else if (args[i] === "--dir" || args[i] === "-d") {
+      config.srcDir = args[++i];
     }
-  } else {
-    saveStringsJson(extractedStrings, outputPath);
   }
-}
 
-function saveStringsJson(extractedStrings: string[], outputPath: string) {
-  const outputData = {
-    count: extractedStrings.length,
-    strings: extractedStrings,
-  };
-  fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2), "utf-8");
-  console.log(`📁 Extracted strings saved to: ${outputPath}`);
+  switch (command) {
+    case "init":
+      await handleInit(projectRoot);
+      break;
+
+    case "sync":
+      const isCheckOnly = args.includes("--check");
+      await handleSync(projectRoot, config, isCheckOnly, localeOverride);
+      break;
+
+    case "review":
+    case "dashboard":
+      openBrowser(`${config.apiUrl}/review`);
+      break;
+
+    case "scan":
+      const targetDir = path.resolve(projectRoot, config.srcDir || "app");
+      const extracted = scanProjectStrings(targetDir);
+      const jsonManager = new JsonManager(config.messagesDir);
+      jsonManager.syncSourceDictionary(extracted, config.sourceLocale);
+      console.log(`📁 Extracted ${extracted.length} strings to ${config.messagesDir}/${config.sourceLocale}.json`);
+      break;
+
+    default:
+      printHelp();
+      break;
+  }
 }
 
 main().catch((err) => {
-  console.error("❌ Scanner CLI encountered an error:", err);
+  console.error("❌ QalSync CLI error:", err);
   process.exit(1);
 });

@@ -142,5 +142,15 @@ export {
   type ScanOptions,
 } from "./scanner.js";
 
+export {
+  loadConfig,
+  generateDefaultConfigFile,
+  DEFAULT_CONFIG,
+  type QalSyncConfig,
+} from "./config.js";
+
+export { JsonManager, type TranslationDictionary } from "./json-manager.js";
+
+
 
 
