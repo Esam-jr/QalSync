@@ -17,8 +17,9 @@ export const DEFAULT_CONFIG: QalSyncConfig = {
   messagesDir: "messages",
 
   srcDir: "app",
-  apiUrl: process.env.QALSYNC_API_URL ?? "http://localhost:3000",
+  apiUrl: process.env.QALSYNC_API_URL ?? "https://qal-sync.vercel.app",
   projectId: process.env.QALSYNC_PROJECT_ID ?? "default",
+
   approvedOnly: false,
 };
 
