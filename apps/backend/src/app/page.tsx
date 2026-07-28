@@ -19,9 +19,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-ash/60 bg-void/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blood/10 border border-blood/30 text-blood font-black text-lg group-hover:scale-105 transition-transform shadow-lg shadow-blood/10">
-              Q
-            </div>
+           
             <span className="text-xl font-bold tracking-tight text-ivory">
               Qal<span className="text-blood">Sync</span>
             </span>
