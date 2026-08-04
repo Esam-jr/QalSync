@@ -12,24 +12,33 @@
   --color-bone: #d4d4d4;
   --color-ivory: #eeeeee;
 
-  /* ── Crimson surfaces (30%) ── */
+  /* ── Crimson surfaces ── */
   --color-crimson: #B63331;
   --color-crimson-dark: #8a2422;
   --color-crimson-deep: #6b1c1a;
 
-  /* ── Blood-red accents (10%) ── */
+  /* ── Blood-red accents ── */
   --color-blood: #FF2A2A;
   --color-blood-glow: #ff4444;
 
   --color-success: #22c55e;
   --color-success-dark: #166534;
+
+  /* ── Typography: Geist via next/font CSS variables ── */
+  --font-sans: var(--font-geist), "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", "Fira Code", monospace;
 }
 
 /* ── Global base styles ── */
 body {
   background-color: var(--color-void);
   color: var(--color-ivory);
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+}
+
+code,
+.font-mono {
+  font-family: var(--font-mono);
 }
 
 ::selection {
@@ -39,5 +48,7 @@ body {
 
 /* ── Spinner keyframe ── */
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
