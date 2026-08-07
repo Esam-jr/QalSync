@@ -18,12 +18,20 @@ export async function PATCH(
     const body = await request.json();
     const { translation, status } = body as {
       translation?: string;
-      status?: "approved" | "draft";
+      status?: string;
     };
 
     if (!translation && !status) {
       return NextResponse.json(
         { error: "Provide at least one of: translation, status" },
+        { status: 400 }
+      );
+    }
+
+    const VALID_STATUSES = ["approved", "draft"] as const;
+    if (status !== undefined && !VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+      return NextResponse.json(
+        { error: `Invalid status value '${status}'. Allowed values: 'approved', 'draft'.` },
         { status: 400 }
       );
     }

@@ -432,6 +432,7 @@ export default function ReviewPage() {
 
     const idsToApprove = Array.from(selectedIds);
     let successCount = 0;
+    let failCount = 0;
 
     for (const id of idsToApprove) {
       try {
@@ -447,17 +448,22 @@ export default function ReviewPage() {
         });
 
         if (res.ok) successCount++;
+        else failCount++;
       } catch {
-        // Best effort
+        failCount++;
       }
     }
 
-    fetchTranslations();
+    await fetchTranslations();
     setBulkLoading(false);
-    setToast({
-      message: `Successfully approved ${successCount} translation(s)!`,
-      type: "success",
-    });
+
+    if (failCount === 0) {
+      setToast({ message: `Approved ${successCount} translation(s).`, type: "success" });
+    } else if (successCount === 0) {
+      setToast({ message: `Failed to approve all ${failCount} item(s). Please try again.`, type: "error" });
+    } else {
+      setToast({ message: `Approved ${successCount} translation(s). ${failCount} failed.`, type: "error" });
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -466,6 +472,7 @@ export default function ReviewPage() {
 
     const idsToDelete = Array.from(selectedIds);
     let successCount = 0;
+    let failCount = 0;
 
     for (const id of idsToDelete) {
       try {
@@ -473,17 +480,22 @@ export default function ReviewPage() {
           method: "DELETE",
         });
         if (res.ok) successCount++;
+        else failCount++;
       } catch {
-        // Best effort
+        failCount++;
       }
     }
 
-    fetchTranslations();
+    await fetchTranslations();
     setBulkLoading(false);
-    setToast({
-      message: `Deleted ${successCount} translation(s).`,
-      type: "success",
-    });
+
+    if (failCount === 0) {
+      setToast({ message: `Deleted ${successCount} translation(s).`, type: "success" });
+    } else if (successCount === 0) {
+      setToast({ message: `Failed to delete all ${failCount} item(s). Please try again.`, type: "error" });
+    } else {
+      setToast({ message: `Deleted ${successCount} translation(s). ${failCount} failed.`, type: "error" });
+    }
   };
 
   const getRowError = (id: string) =>

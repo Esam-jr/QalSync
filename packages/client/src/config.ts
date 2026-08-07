@@ -25,20 +25,29 @@ export const DEFAULT_CONFIG: QalSyncConfig = {
 };
 
 export function loadConfig(projectRoot: string = process.cwd()): QalSyncConfig {
-  // Check for qalsync.config.json or qalsync.config.js or fallback to defaults
+  // ── 1. Prefer qalsync.config.json (reliable, fully parseable) ────────────
   const jsonPath = path.resolve(projectRoot, "qalsync.config.json");
   if (fs.existsSync(jsonPath)) {
     try {
       const raw = fs.readFileSync(jsonPath, "utf-8");
       const parsed = JSON.parse(raw);
       return { ...DEFAULT_CONFIG, ...parsed };
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn(
+        `[QalSync] Failed to parse qalsync.config.json: ${err instanceof Error ? err.message : String(err)}. ` +
+          "Falling back to qalsync.config.ts or defaults."
+      );
     }
   }
 
+  // ── 2. Fallback: qalsync.config.ts (regex-based — limited) ──────────────
   const tsConfigPath = path.resolve(projectRoot, "qalsync.config.ts");
   if (fs.existsSync(tsConfigPath)) {
+    console.warn(
+      "[QalSync] Reading qalsync.config.ts via regex. " +
+        "Computed values (e.g. process.env references) will not be resolved. " +
+        "Run 'npx qalsync init' to generate a qalsync.config.json for reliable config loading."
+    );
     try {
       const content = fs.readFileSync(tsConfigPath, "utf-8");
       const configObj: Partial<QalSyncConfig> = {};
@@ -70,11 +79,14 @@ export function loadConfig(projectRoot: string = process.cwd()): QalSyncConfig {
       if (approvedMatch) configObj.approvedOnly = approvedMatch[1] === "true";
 
       return { ...DEFAULT_CONFIG, ...configObj };
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn(
+        `[QalSync] Failed to read qalsync.config.ts: ${err instanceof Error ? err.message : String(err)}. Using defaults.`
+      );
     }
   }
 
+  // ── 3. Last resort: built-in defaults ─────────────────────────────────────
   return DEFAULT_CONFIG;
 }
 
