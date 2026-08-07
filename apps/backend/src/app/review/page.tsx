@@ -161,6 +161,15 @@ export default function ReviewPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Pagination
+  const PAGE_SIZE = 30;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   const [fetchLoading, setFetchLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [rowErrors, setRowErrors] = useState<RowError[]>([]);
@@ -258,6 +267,8 @@ export default function ReviewPage() {
         projectId: selectedProject,
         locale,
         status: statusTab,
+        page: String(currentPage),
+        limit: String(PAGE_SIZE),
       });
 
       const res = await fetch(`/api/translations?${params}`);
@@ -270,6 +281,7 @@ export default function ReviewPage() {
 
       const data = await res.json();
       setTranslations(data.translations || []);
+      setTotalCount(data.total ?? 0);
       setEditedTranslations({});
     } catch (err) {
       if (err instanceof TypeError) {
@@ -282,6 +294,11 @@ export default function ReviewPage() {
     } finally {
       setFetchLoading(false);
     }
+  }, [selectedProject, locale, statusTab, currentPage]);
+
+  // Reset to page 1 whenever the primary filters change
+  useEffect(() => {
+    setCurrentPage(1);
   }, [selectedProject, locale, statusTab]);
 
   useEffect(() => {
@@ -844,14 +861,36 @@ export default function ReviewPage() {
                   {bulkLoading && <Spinner />}
                   Approve Selected ({selectedIds.size})
                 </button>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={bulkLoading}
-                  className="flex items-center gap-2 rounded-lg border border-blood/40 bg-crimson-dark/40 px-4 py-1.5 text-xs font-semibold text-blood-glow transition-all hover:bg-crimson-dark hover:text-white disabled:opacity-50 hover:cursor-pointer"
-                >
-                  {bulkLoading && <Spinner />}
-                  Delete Selected ({selectedIds.size})
-                </button>
+                {showBulkDeleteConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-smoke">Delete {selectedIds.size} item(s)?</span>
+                    <button
+                      onClick={() => {
+                        setShowBulkDeleteConfirm(false);
+                        handleBulkDelete();
+                      }}
+                      disabled={bulkLoading}
+                      className="rounded-lg bg-blood px-3 py-1.5 text-xs font-semibold text-white hover:bg-blood-glow hover:cursor-pointer"
+                    >
+                      Yes, Delete
+                    </button>
+                    <button
+                      onClick={() => setShowBulkDeleteConfirm(false)}
+                      className="rounded-lg border border-ash bg-onyx px-3 py-1.5 text-xs text-silver hover:text-ivory hover:cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    disabled={bulkLoading}
+                    className="flex items-center gap-2 rounded-lg border border-blood/40 bg-crimson-dark/40 px-4 py-1.5 text-xs font-semibold text-blood-glow transition-all hover:bg-crimson-dark hover:text-white disabled:opacity-50 hover:cursor-pointer"
+                  >
+                    {bulkLoading && <Spinner />}
+                    Delete Selected ({selectedIds.size})
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -963,7 +1002,7 @@ export default function ReviewPage() {
                       </span>
 
                       <textarea
-                        defaultValue={t.translation ?? ""}
+                        value={editedTranslations[t.id] ?? t.translation ?? ""}
                         onChange={(e) =>
                           setEditedTranslations((prev) => ({
                             ...prev,
@@ -987,13 +1026,33 @@ export default function ReviewPage() {
                         {t.status === "approved" ? "Update" : "Approve"}
                       </button>
 
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        disabled={isApproving || isDeleting}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:border-blood hover:text-blood-glow disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
-                      >
-                        {isDeleting ? <Spinner /> : "Delete"}
-                      </button>
+                      {confirmDeleteId === t.id ? (
+                        <div className="flex w-full gap-1.5">
+                          <button
+                            onClick={() => {
+                              setConfirmDeleteId(null);
+                              handleDelete(t.id);
+                            }}
+                            className="flex-1 rounded-lg bg-blood px-3 py-1.5 text-xs font-semibold text-white hover:bg-blood-glow hover:cursor-pointer"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="flex-1 rounded-lg border border-ash bg-onyx px-3 py-1.5 text-xs text-silver hover:text-ivory hover:cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(t.id)}
+                          disabled={isApproving || isDeleting}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-ash bg-onyx px-4 py-2 text-xs font-medium text-silver transition-colors hover:border-blood hover:text-blood-glow disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer"
+                        >
+                          {isDeleting ? <Spinner /> : "Delete"}
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1006,6 +1065,38 @@ export default function ReviewPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        {totalCount > PAGE_SIZE && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ash bg-obsidian/50 px-5 py-3">
+            <p className="text-xs text-silver">
+              Showing{" "}
+              <span className="font-medium text-ivory">
+                {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)}
+              </span>{" "}
+              of <span className="font-medium text-ivory">{totalCount}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || fetchLoading}
+                className="rounded-lg border border-ash bg-onyx px-3 py-1.5 text-xs text-silver transition-colors hover:border-crimson hover:text-ivory disabled:cursor-not-allowed disabled:opacity-40 hover:cursor-pointer"
+              >
+                ← Prev
+              </button>
+              <span className="min-w-[60px] text-center text-xs text-silver">
+                {currentPage} / {Math.ceil(totalCount / PAGE_SIZE)}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(Math.ceil(totalCount / PAGE_SIZE), p + 1))}
+                disabled={currentPage >= Math.ceil(totalCount / PAGE_SIZE) || fetchLoading}
+                className="rounded-lg border border-ash bg-onyx px-3 py-1.5 text-xs text-silver transition-colors hover:border-crimson hover:text-ivory disabled:cursor-not-allowed disabled:opacity-40 hover:cursor-pointer"
+              >
+                Next →
+              </button>
+            </div>
           </div>
         )}
       </div>

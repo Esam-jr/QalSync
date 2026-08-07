@@ -13,6 +13,8 @@ import {
   ClipboardText,
   Check,
   ArrowRight,
+  List,
+  X,
 } from "@phosphor-icons/react";
 
 // ── Shared easing curve ──────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ function Reveal({
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [copied, setCopied] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "init" | "sync" | "check" | "review"
   >("sync");
@@ -86,14 +89,54 @@ export default function HomePage() {
             </a>
           </nav>
 
-          <Link
-            href="/review"
-            className="flex items-center gap-1.5 rounded-xl bg-blood px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blood/20 transition-all hover:bg-blood-glow hover:-translate-y-[1px] active:scale-[0.97]"
-          >
-            Review Dashboard
-            <ArrowRight size={12} weight="bold" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/review"
+              className="flex items-center gap-1.5 rounded-xl bg-blood px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blood/20 transition-all hover:bg-blood-glow hover:-translate-y-[1px] active:scale-[0.97]"
+            >
+              Review Dashboard
+              <ArrowRight size={12} weight="bold" />
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              className="flex md:hidden items-center justify-center rounded-lg border border-ash/80 bg-onyx p-2 text-silver transition-colors hover:border-crimson hover:text-ivory"
+            >
+              {mobileMenuOpen ? <X size={20} weight="bold" /> : <List size={20} weight="bold" />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="border-t border-ash/50 bg-void/95 px-6 py-4 md:hidden">
+            <nav className="flex flex-col gap-3 text-sm font-medium text-silver">
+              <a
+                href="#features"
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-lg px-2 py-1.5 transition-colors hover:bg-onyx hover:text-ivory"
+              >
+                Features
+              </a>
+              <a
+                href="#workflow"
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-lg px-2 py-1.5 transition-colors hover:bg-onyx hover:text-ivory"
+              >
+                How It Works
+              </a>
+              <a
+                href="#cli"
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-lg px-2 py-1.5 transition-colors hover:bg-onyx hover:text-ivory"
+              >
+                CLI Reference
+              </a>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* ── Hero: Asymmetric Split ─────────────────────────────────────────── */}
