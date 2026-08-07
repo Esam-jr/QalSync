@@ -2,13 +2,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Refresh session for /review dashboard and /api/translations management routes
-  const isProtected =
-    request.nextUrl.pathname.startsWith("/review") ||
+  const isReviewPage = request.nextUrl.pathname.startsWith("/review");
+  const isProtectedApi =
     request.nextUrl.pathname.startsWith("/api/translations") ||
     request.nextUrl.pathname.startsWith("/api/projects");
 
-  if (!isProtected) {
+  if (!isReviewPage && !isProtectedApi) {
     return NextResponse.next();
   }
 
@@ -45,8 +44,18 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session — this keeps the auth cookie alive
-  await supabase.auth.getUser();
+  // Refresh session — keeps the auth cookie alive
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Redirect unauthenticated browser requests for /review to the root page.
+  // API routes handle their own 401 responses — no redirect needed there.
+  if (!user && isReviewPage) {
+    const loginUrl = new URL("/", request.url);
+    loginUrl.searchParams.set("redirected", "1");
+    return NextResponse.redirect(loginUrl);
+  }
 
   return response;
 }
@@ -54,5 +63,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/review/:path*", "/api/translations/:path*", "/api/projects/:path*"],
 };
+
 
 
