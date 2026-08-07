@@ -9,18 +9,19 @@ export interface QalSyncConfig {
   apiUrl: string;
   projectId: string;
   approvedOnly: boolean;
+  /** Your Gemini API key — read from GEMINI_API_KEY env var or set directly. */
+  geminiApiKey: string;
 }
 
 export const DEFAULT_CONFIG: QalSyncConfig = {
   sourceLocale: "en",
   targetLocales: ["am", "om", "ti"],
   messagesDir: "messages",
-
   srcDir: "app",
   apiUrl: process.env.QALSYNC_API_URL ?? "https://qal-sync.vercel.app",
   projectId: process.env.QALSYNC_PROJECT_ID ?? "default",
-
   approvedOnly: false,
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };
 
 export function loadConfig(projectRoot: string = process.cwd()): QalSyncConfig {

@@ -3,6 +3,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 export interface TranslateOptions {
   apiUrl: string;
   projectId: string;
+  /** Your Gemini API key — get one free at https://aistudio.google.com/apikey */
+  geminiApiKey: string;
   timeoutMs?: number;
 }
 
@@ -31,14 +33,17 @@ export async function translate(
   locale: string,
   options: TranslateOptions
 ): Promise<string> {
-  const { apiUrl, projectId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { apiUrl, projectId, geminiApiKey, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const url = `${apiUrl.replace(/\/+$/, "")}/api/translate`;
 
   const res = await fetchWithTimeout(
     url,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-gemini-api-key": geminiApiKey,
+      },
       body: JSON.stringify({ text, locale, projectId }),
     },
     timeoutMs
@@ -62,14 +67,17 @@ export async function translateWithMeta(
   locale: string,
   options: TranslateOptions
 ): Promise<TranslateResponse> {
-  const { apiUrl, projectId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { apiUrl, projectId, geminiApiKey, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const url = `${apiUrl.replace(/\/+$/, "")}/api/translate`;
 
   const res = await fetchWithTimeout(
     url,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-gemini-api-key": geminiApiKey,
+      },
       body: JSON.stringify({ text, locale, projectId }),
     },
     timeoutMs
@@ -109,14 +117,17 @@ export async function translateBatchWithMeta(
   locale: string,
   options: TranslateOptions
 ): Promise<Record<string, TranslateResponse>> {
-  const { apiUrl, projectId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { apiUrl, projectId, geminiApiKey, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const url = `${apiUrl.replace(/\/+$/, "")}/api/translate`;
 
   const res = await fetchWithTimeout(
     url,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-gemini-api-key": geminiApiKey,
+      },
       body: JSON.stringify({ texts, locale, projectId }),
     },
     timeoutMs

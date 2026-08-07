@@ -6,20 +6,6 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ti: "Tigrinya (ትግርኛ)",
 };
 
-
-let genAI: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!genAI) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing GEMINI_API_KEY environment variable");
-    }
-    genAI = new GoogleGenerativeAI(key);
-  }
-  return genAI;
-}
-
 /**
  * Candidate models to try in order. If one hits quota (429), 404, or capacity issues (503), fall back to the next.
  */
@@ -33,10 +19,13 @@ const DEFAULT_MODELS = [
  * Translate text into the target locale using Gemini.
  * The prompt is tuned for natural, contemporary phrasing in
  * low-resource languages like Amharic and Afaan Oromo.
+ *
+ * @param apiKey - The caller's own Gemini API key (BYOK).
  */
 export async function translateText(
   text: string,
-  locale: string
+  locale: string,
+  apiKey: string
 ): Promise<string> {
   const languageName = LANGUAGE_NAMES[locale] ?? locale;
 
@@ -54,7 +43,7 @@ Guidelines:
 Text to translate:
 ${text}`;
 
-  const ai = getGenAI();
+  const ai = new GoogleGenerativeAI(apiKey);
 
   // Deduplicate candidate models
   const configuredModel = process.env.GEMINI_MODEL;
@@ -105,13 +94,17 @@ ${text}`;
  * Translate a batch of texts into the target locale using Gemini.
  * Returns a key-value record mapping each original source text to its translated string.
  */
+/**
+ * @param apiKey - The caller's own Gemini API key (BYOK).
+ */
 export async function translateBatchText(
   texts: string[],
-  locale: string
+  locale: string,
+  apiKey: string
 ): Promise<Record<string, string>> {
   if (texts.length === 0) return {};
   if (texts.length === 1) {
-    const singleTranslation = await translateText(texts[0], locale);
+    const singleTranslation = await translateText(texts[0], locale, apiKey);
     return { [texts[0]]: singleTranslation };
   }
 
@@ -132,7 +125,7 @@ Guidelines:
 Texts to translate:
 ${JSON.stringify(texts, null, 2)}`;
 
-  const ai = getGenAI();
+  const ai = new GoogleGenerativeAI(apiKey);
   const configuredModel = process.env.GEMINI_MODEL;
   const modelsToTry = Array.from(
     new Set([configuredModel, ...DEFAULT_MODELS].filter(Boolean) as string[])
@@ -191,7 +184,7 @@ ${JSON.stringify(texts, null, 2)}`;
   );
   const fallbackRecord: Record<string, string> = {};
   for (const text of texts) {
-    fallbackRecord[text] = await translateText(text, locale);
+    fallbackRecord[text] = await translateText(text, locale, apiKey);
   }
   return fallbackRecord;
 }

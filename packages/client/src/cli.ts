@@ -122,6 +122,36 @@ async function handleSync(
   isCheckOnly: boolean,
   localeOverride?: string
 ) {
+  // ── Pre-flight: Gemini API key check ─────────────────────────────────────
+  // Skip for --check mode since it never calls the translation API.
+  if (!isCheckOnly) {
+    const geminiApiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      console.error("");
+      console.error("❌  GEMINI_API_KEY is not set.");
+      console.error("");
+      console.error("   QalSync uses your own Gemini API key to run translations.");
+      console.error("   This keeps your quota separate and the service free for everyone.");
+      console.error("");
+      console.error("   How to get one (free, takes ~2 min):");
+      console.error("     1. Go to https://aistudio.google.com/apikey");
+      console.error("     2. Click \"Create API key\"");
+      console.error("     3. Copy the key and add it to your project:");
+      console.error("");
+      console.error("        # .env (recommended)");
+      console.error("        GEMINI_API_KEY=AIza...");
+      console.error("");
+      console.error("        # or export in your shell");
+      console.error("        export GEMINI_API_KEY=AIza...");
+      console.error("");
+      console.error("   Then re-run: npx qalsync sync");
+      console.error("");
+      process.exit(1);
+    }
+    // Store resolved key back on config so it flows into translateBatch options.
+    config.geminiApiKey = geminiApiKey;
+  }
+
   const targetDir = path.resolve(projectRoot, config.srcDir || "app");
   const fallbackDir = fs.existsSync(targetDir)
     ? targetDir
@@ -200,6 +230,7 @@ async function handleSync(
       const translationMap = await translateBatch(untranslated, locale, {
         apiUrl: config.apiUrl,
         projectId: config.projectId,
+        geminiApiKey: config.geminiApiKey,
       });
 
       const { total, merged } = jsonManager.mergeTranslations(
@@ -211,11 +242,14 @@ async function handleSync(
         `✅ [${locale}] Merged ${merged} new translations into ${config.messagesDir}/${locale}.json (Total: ${total})`
       );
     } catch (err) {
-      console.error(
-        `❌ [${locale}] Translation failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // Surface Gemini quota errors clearly.
+      if (errMsg.includes("429") || errMsg.includes("quota") || errMsg.includes("rate limit")) {
+        console.error(`\n⚠️  [${locale}] Gemini rate limit hit for your API key.`);
+        console.error(`   Wait a moment and re-run, or upgrade at https://aistudio.google.com`);
+      } else {
+        console.error(`❌ [${locale}] Translation failed: ${errMsg}`);
+      }
     }
   }
 
