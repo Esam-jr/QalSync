@@ -137,7 +137,7 @@ export default function HomePage() {
               >
                 Zero manual JSON wrangling. AST string extraction, incremental
                 caching, and Gemini AI translations for Amharic, Afaan Oromo,
-                and Tigrinya.
+                Tigrinya, and Somali.
               </motion.p>
 
               {/* Install pill */}
@@ -239,6 +239,7 @@ export default function HomePage() {
                 { code: "am", name: "Amharic", native: "አማርኛ" },
                 { code: "om", name: "Afaan Oromo", native: "Oromiffa" },
                 { code: "ti", name: "Tigrinya", native: "ትግርኛ" },
+                { code: "so", name: "Somali", native: "Af Soomaali" },
               ].map((lang) => (
                 <span
                   key={lang.code}

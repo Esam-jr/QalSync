@@ -791,6 +791,7 @@ export default function ReviewPage() {
               <option value="am">Amharic (አማርኛ)</option>
               <option value="om">Afaan Oromo</option>
               <option value="ti">Tigrinya (ትግርኛ)</option>
+              <option value="so">Somali (Af Soomaali)</option>
             </select>
           </div>
 
@@ -946,7 +947,7 @@ export default function ReviewPage() {
                     <div>
                       <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-smoke">
                         Translation ·{" "}
-                        {t.locale === "am" ? "አማርኛ" : t.locale === "ti" ? "ትግርኛ" : "Afaan Oromo"}
+                        {({ am: "አማርኛ", om: "Afaan Oromo", ti: "ትግርኛ", so: "Af Soomaali" } as Record<string, string>)[t.locale] ?? t.locale}
                       </span>
 
                       <textarea

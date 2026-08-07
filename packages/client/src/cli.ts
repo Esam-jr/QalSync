@@ -58,7 +58,7 @@ function openBrowser(url: string) {
 
 async function promptLocales(): Promise<string[]> {
   if (!process.stdin.isTTY) {
-    return ["am", "om", "ti"];
+    return ["am", "om", "ti", "so"];
   }
 
   const rl = readline.createInterface({
@@ -67,28 +67,32 @@ async function promptLocales(): Promise<string[]> {
   });
 
   console.log("\n🌐 Select target languages to support:");
-  console.log("  1) All: Amharic (am), Afaan Oromo (om), Tigrinya (ti) [Default]");
+  console.log("  1) All: Amharic (am), Afaan Oromo (om), Tigrinya (ti), Somali (so) [Default]");
   console.log("  2) Amharic (am) & Afaan Oromo (om)");
   console.log("  3) Amharic (am) & Tigrinya (ti)");
-  console.log("  4) Amharic (am) only");
-  console.log("  5) Afaan Oromo (om) only");
-  console.log("  6) Tigrinya (ti) only");
-  console.log("  7) Custom (enter comma-separated codes, e.g. am,ti)\n");
+  console.log("  4) Amharic (am) & Somali (so)");
+  console.log("  5) Amharic (am) only");
+  console.log("  6) Afaan Oromo (om) only");
+  console.log("  7) Tigrinya (ti) only");
+  console.log("  8) Somali (so) only");
+  console.log("  9) Custom (enter comma-separated codes, e.g. am,ti,so)\n");
 
   return new Promise((resolve) => {
-    rl.question("Enter choice (1-7) [1]: ", (answer) => {
+    rl.question("Enter choice (1-9) [1]: ", (answer) => {
       rl.close();
       const choice = answer.trim();
       if (choice === "2") resolve(["am", "om"]);
       else if (choice === "3") resolve(["am", "ti"]);
-      else if (choice === "4") resolve(["am"]);
-      else if (choice === "5") resolve(["om"]);
-      else if (choice === "6") resolve(["ti"]);
-      else if (choice === "7" || choice.includes(",")) {
+      else if (choice === "4") resolve(["am", "so"]);
+      else if (choice === "5") resolve(["am"]);
+      else if (choice === "6") resolve(["om"]);
+      else if (choice === "7") resolve(["ti"]);
+      else if (choice === "8") resolve(["so"]);
+      else if (choice === "9" || choice.includes(",")) {
         const codes = choice.split(",").map((c) => c.trim()).filter(Boolean);
-        resolve(codes.length > 0 ? codes : ["am", "om", "ti"]);
+        resolve(codes.length > 0 ? codes : ["am", "om", "ti", "so"]);
       } else {
-        resolve(["am", "om", "ti"]);
+        resolve(["am", "om", "ti", "so"]);
       }
     });
   });
